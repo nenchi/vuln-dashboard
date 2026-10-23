@@ -1,29 +1,57 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "labels": ["dependencies"],
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": [
+    "dependencies"
+  ],
   "platformAutomerge": false,
   "packageRules": [
     {
-      "description": "Python base image patch updates (3.13.8 → 3.13.9): Renovate merges once CI (unit + container tests) is green; the merge makes an automatic patch release",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["python"],
-      "matchUpdateTypes": ["patch"],
+      "description": "Python base image patch updates (3.13.8 \u2192 3.13.9): Renovate merges once CI (unit + container tests) is green; the merge makes an automatic patch release",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "python"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
       "automerge": true,
-      "labels": ["dependencies", "python"]
+      "labels": [
+        "dependencies",
+        "python"
+      ]
     },
     {
-      "description": "Python minor/major (3.13 → 3.14): PR only, merged by hand after a look",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["python"],
-      "matchUpdateTypes": ["minor", "major"],
+      "description": "Python minor/major (3.13 \u2192 3.14, a new language version): PR only, merged by hand after a look",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "python"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
       "automerge": false,
-      "labels": ["dependencies", "python"]
+      "labels": [
+        "dependencies",
+        "python"
+      ]
     },
     {
-      "description": "GitHub Actions minor/patch: merged once CI is green, no release (the image doesn't change)",
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "description": "GitHub Actions minor/patch: merged once CI is green, no release (the image doesn't change); major by hand",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "automerge": true
     }
   ]
