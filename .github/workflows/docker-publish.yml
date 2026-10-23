@@ -13,7 +13,12 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # 26.04 too until ubuntu-latest has switched to it (rollout ends 2026-11-19), then drop the matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-26.04]
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     steps:
@@ -46,11 +51,23 @@ jobs:
       - name: Smoke test the container
         run: |
           cp -r tests/fixture/state /tmp/state
+          chmod -R a+rwX /tmp/state
           docker run -d --name vd -p 8080:80 -v /tmp/state:/srv/state vuln-dashboard:test
           # the image's own healthcheck command, run now instead of waiting a minute
           for i in $(seq 20); do docker exec vd wget -qO /dev/null http://127.0.0.1/healthz && break; sleep 1; done
           docker exec vd wget -qO /dev/null http://127.0.0.1/healthz
           python3 tests/smoke_test.py http://127.0.0.1:8080 || { docker logs vd; exit 1; }
+
+      # the dashboard checks itself: real Trivy scan of this image via publish.py, real CISA KEV download
+      - name: Self-scan with Trivy + real CISA KEV
+        env:
+          STATE_DIR: /tmp/state
+          REPO_NAME: vuln-dashboard
+          IMAGES: vuln-dashboard:test
+          TRIVY_IMAGE: aquasec/trivy:0.69.3   # renovate: datasource=docker depName=aquasec/trivy
+        run: |
+          python3 publish.py
+          python3 tests/selfscan_test.py http://127.0.0.1:8080 vuln-dashboard
 
       - name: Container log
         if: always()

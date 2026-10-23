@@ -53,6 +53,8 @@ A finding that disappears from the next scan counts as patched. An image that le
 removed, not patched, so it stays out of the time-to-patch numbers.
 
 Images come from every `compose.yml` / `compose.yaml` below the current folder, or from `IMAGES="img1 img2"`.
+Trivy reads them from the local Docker daemon first (also locally built images, no re-pull) through
+`/var/run/docker.sock`; set `TRIVY_DOCKER_SOCKET` to another path (rootless Docker) or empty to always pull.
 
 ### Option 1: on the Docker host, with cron
 
@@ -187,7 +189,10 @@ python3 tests/smoke_test.py http://127.0.0.1:8080
 ```
 
 CI (`.github/workflows/docker-publish.yml`) runs the unit tests, builds the image, starts it with the sample data and
-runs the end-to-end test on every pull request and push. Only when that passes does it publish to
+runs the end-to-end test on every pull request and push. Then **the dashboard checks itself**: `publish.py` scans the
+freshly built image with real Trivy, and `tests/selfscan_test.py` checks that the dashboard serves that scan and its
+package list, downloads the real CISA KEV list, and writes a summary of the image's own findings to the job page.
+The test job runs on `ubuntu-latest` and `ubuntu-26.04`. Only when that passes does it publish to
 `ghcr.io/nenchi/vuln-dashboard`: `latest` on pushes to main, `x.y.z` + `latest` on a `vx.y.z` tag. Renovate opens
 PRs for the Python base image and the GitHub Actions, and the same tests run on each of them.
 

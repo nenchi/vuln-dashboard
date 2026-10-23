@@ -8,7 +8,7 @@ Two ways to deliver (see README):
                   (owner/name of the data repo); GITHUB_REPOSITORY, GITHUB_REF, GITHUB_SERVER_URL are set by Gitea.
   Local / cron:   writes straight into the dashboard's state folder. Env: STATE_DIR, REPO_NAME.
 Images: every compose.y(a)ml below the current folder, or IMAGES="img1 img2" (e.g. from docker ps).
-Optional: TRIVY_IMAGE, TRIVY_CACHE_DIR.
+Optional: TRIVY_IMAGE, TRIVY_CACHE_DIR, TRIVY_DOCKER_SOCKET (default /var/run/docker.sock, "" = always pull).
 """
 import base64
 import datetime as dt
@@ -27,6 +27,9 @@ SEVS = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
 
 TRIVY = os.environ.get("TRIVY_IMAGE") or "aquasec/trivy:latest"
 CACHE = os.environ.get("TRIVY_CACHE_DIR") or "/tmp/trivy-cache"
+# Trivy reads images from the local Docker daemon through this socket first (locally built images, no re-pull);
+# a path on the Docker host. Set it empty to make Trivy always pull from the registry (rootless Docker: its socket)
+SOCKET = os.environ.get("TRIVY_DOCKER_SOCKET", "/var/run/docker.sock")
 API = os.environ.get("GITHUB_SERVER_URL", "").rstrip("/") + "/api/v1"
 TOKEN = os.environ.get("VULN_TOKEN", "")
 REPO = os.environ.get("REPO_NAME") or os.environ.get("GITHUB_REPOSITORY", "").split("/")[-1]
@@ -57,7 +60,8 @@ def image_name(img):
 def trivy_scan(img):
     # JSON on stdout: the job container and the docker daemon may not share paths, so no output volume
     r = subprocess.run(
-        ["docker", "run", "--rm", "-v", f"{CACHE}:/root/.cache/trivy", TRIVY, "image",
+        ["docker", "run", "--rm", "-v", f"{CACHE}:/root/.cache/trivy", *(["-v", f"{SOCKET}:/var/run/docker.sock:ro"] if SOCKET else []),
+         TRIVY, "image",
          "--quiet", "--scanners", "vuln", "--list-all-pkgs", "--format", "json", img],
         capture_output=True, text=True)
     if r.returncode:

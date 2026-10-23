@@ -53,6 +53,29 @@
         "patch"
       ],
       "automerge": true
+    },
+    {
+      "description": "Trivy (CI self-scan only, not in the image): minor/patch merged after tests, no release",
+      "matchPackageNames": [
+        "aquasec/trivy"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "automerge": true
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Trivy version used by the CI self-scan (docker-publish.yml: '# renovate: datasource=docker depName=...')",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "TRIVY_IMAGE: aquasec/trivy:(?<currentValue>[^\\s]+)\\s+# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)"
+      ]
     }
   ]
 }
