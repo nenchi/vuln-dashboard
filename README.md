@@ -191,7 +191,13 @@ runs the end-to-end test on every pull request and push. Only when that passes d
 `ghcr.io/nenchi/vuln-dashboard`: `latest` on pushes to main, `x.y.z` + `latest` on a `vx.y.z` tag. Renovate opens
 PRs for the Python base image and the GitHub Actions, and the same tests run on each of them.
 
-**Release:** bump `VERSION` in `app/app.py`, commit, tag `vX.Y.Z` (CI checks that the tag matches) and push the tag.
+**Automatic patch releases:** Renovate merges a Python **patch** update (e.g. 3.13.8 → 3.13.9) by itself, but only
+after the tests passed on its PR. The merge then bumps the version (0.1.1 → 0.1.2), tags it, publishes the image and
+writes a GitHub Release ("Bump Python 3.13.8 → 3.13.9"). Python **minor/major** updates (3.13 → 3.14) stay a normal PR
+to merge by hand. Action updates are merged after the tests too, without a release (the image doesn't change).
+
+**Manual release:** bump `VERSION` in `app/app.py`, commit, tag `vX.Y.Z` (CI checks that the tag matches) and push
+the tag.
 
 ## License
 
