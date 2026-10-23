@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vulnerability Dashboard</title>
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="assets/manifest.webmanifest">
+<meta name="theme-color" content="#1f2430">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #fcfcfb; --card: #ffffff; --ink: #1a1a19; --ink-2: #55554f; --muted: #8a8a83;
+    --line: #e6e6e1; --link: #2457c5;
+    --crit: #d03b3b; --high: #ec835a; --med: #fab219; --low: #a3a39b; --good: #0ca30c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1a1a19; --card: #232321; --ink: #f0f0ec; --ink-2: #b9b9b2; --muted: #85857e;
+      --line: #34342f; --link: #8fb0ff; --low: #75756e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1a1a19; --card: #232321; --ink: #f0f0ec; --ink-2: #b9b9b2; --muted: #85857e;
+    --line: #34342f; --link: #8fb0ff; --low: #75756e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, sans-serif; }
+  main { max-width: 1800px; margin: 0 auto; padding: 16px 24px; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  h1 { font-size: 20px; margin: 0; }
+  .brand { display: flex; align-items: center; gap: 10px; color: inherit; }
+  .brand:hover { text-decoration: none; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  select, input, button { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; color: var(--ink-2); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile, .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .tile .label { color: var(--ink-2); font-size: 12px; }
+  .tile .value { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tile .value a { color: inherit; text-decoration: underline dotted 2px; text-underline-offset: 4px; }
+  .tile .sub { color: var(--muted); font-size: 12px; }
+  .grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+  @media (max-width: 600px) {
+    main { padding: 12px 16px; }
+    h1 { font-size: 17px; }
+    .tiles { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .tile { padding: 10px 12px; }
+    .tile .value { font-size: 22px; }
+    .chart { height: 220px; }
+    #pq { min-width: 0 !important; flex: 1 1 100%; }
+  }
+  .chart { position: relative; height: 260px; }
+  .card { margin-bottom: 16px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--ink-2); font-weight: 500; font-size: 12px; cursor: pointer; user-select: none; }
+  td.num, th.num { text-align: right; }
+  td.wrap { white-space: normal; min-width: 220px; color: var(--ink-2); }
+  .sev { display: inline-flex; align-items: center; gap: 6px; }
+  .sev::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--c); }
+  .muted { color: var(--muted); }
+  .hot { background: var(--crit); color: #fff; border-radius: 4px; padding: 0 5px; font-size: 11px; font-weight: 600; cursor: help; }
+  tr.hotrow td { background: color-mix(in srgb, var(--crit) 12%, transparent); }
+  .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+  footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 0 16px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--link); border-color: var(--link); color: #fff; }
+  #srcform td { padding: 4px 8px 4px 0; border: 0; }
+  #srcform input:not([type]), #srcform input[type=url] { width: 100%; min-width: 160px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <a href="#" class="brand"><img src="assets/logo.svg" alt="" width="32" height="32"><h1 id="title">Vulnerability Dashboard</h1></a>
+    <div class="filters">
+      <a href="#" id="back" hidden>← All projects</a>
+      <a href="#packages" id="pkglink">Packages</a>
+      <a href="#settings">Settings</a>
+      <a href="#" id="logout" hidden>Log out</a>
+      <label>Range <select id="range"><option value="30">30 days</option><option value="90" selected>90 days</option></select></label>
+    </div>
+  </header>
+  <div id="dash">
+  <div class="tiles" id="tiles"></div>
+  <div class="grid2">
+    <div class="card"><h2>Open findings by severity</h2><div class="chart"><canvas id="trend"></canvas></div></div>
+    <div class="card"><h2>New vs patched per week</h2><div class="chart"><canvas id="flow"></canvas></div></div>
+  </div>
+  </div>
+  <div id="tables"></div>
+  <footer id="version"></footer>
+</main>
+<script>
+const SEVS = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const SEV_VAR = { CRITICAL: "--crit", HIGH: "--high", MEDIUM: "--med", LOW: "--low", UNKNOWN: "--low" };
+const DAY = 864e5;
+let states = [], charts = {}, inventories = null;
+// exploited-in-the-wild list from hot.py; hotp = repo|image|package -> {src, note}
+let hot = { cves: {}, pkgs: {}, errors: [] }, hotp = {};
+const rank = s => SEVS.indexOf(s) < 0 ? 9 : SEVS.indexOf(s);
+
+const day = t => t.slice(0, 10);
+const days = (a, b) => (new Date(b) - new Date(a)) / DAY;
+const median = xs => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const fmtDays = d => d == null ? "–" : d < 1 ? "<1 d" : `${Math.round(d)} d`;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const sevCell = (s, label = s) => `<span class="sev" style="--c:var(${SEV_VAR[s] || "--low"})">${label}</span>`;
+// jump to Packages filtered by severity (and project)
+const pkgLink = (sev, repo) => "#packages?" + new URLSearchParams(Object.entries({ repo, sev }).filter(([, v]) => v));
+const cveLink = id => /^(CVE|GHSA)-/.test(id) ? `<a href="https://avd.aquasec.com/nvd/${id.toLowerCase()}" target="_blank" rel="noopener">${esc(id)}</a>` : esc(id);
+const hotOf = (id, pkg) => hot.cves[id] || hot.pkgs[pkg.toLowerCase()];
+const hotBadge = h => h ? ` <span class="hot" title="${esc(h.src + (h.note ? ": " + h.note : ""))}">EXPLOITED</span>` : "";
+// fix landed = closed, measured from when a fix was first available (or first seen if fix predates us)
+const ttp = c => days(c.fix_first || c.first, c.closed);
+
+async function load() {
+  const res = await fetch("state/", { headers: { Accept: "application/json" } });
+  const files = (await res.json()).filter(f => f.name.endsWith(".json"));
+  states = (await Promise.all(files.map(f => fetch("state/" + f.name).then(r => r.json()))))
+    .sort((a, b) => a.repo.localeCompare(b.repo));
+  hot = await fetch("state/hot/exploited.json").then(r => r.ok ? r.json() : hot).catch(() => hot);
+  fetch("api/auth").then(r => r.json()).then(a => document.getElementById("logout").hidden = !a.logged_in).catch(() => {});
+  fetch("api/version").then(r => r.json()).then(v => document.getElementById("version").textContent = `vuln-dashboard ${v.version}`).catch(() => {});
+  // watched package names can match packages with no finding yet (zero-day), so they need the inventories
+  if (Object.keys(hot.pkgs).length) await loadInventories();
+  for (const st of states) for (const f of Object.values(st.open)) {
+    const h = hotOf(f.id, f.pkg);
+    if (h) hotp[`${st.repo}|${f.img}|${f.pkg}`] ||= h;
+  }
+  for (const inv of inventories || []) for (const [img, d] of Object.entries(inv.images)) for (const [name] of d.pkgs) {
+    const h = hot.pkgs[name.toLowerCase()];
+    if (h) hotp[`${inv.repo}|${img}|${name}`] ||= h;
+  }
+  render();
+}
+
+async function loadInventories() {
+  const res = await fetch("state/packages/", { headers: { Accept: "application/json" } });
+  const files = res.ok ? (await res.json()).filter(f => f.name.endsWith(".json")) : [];
+  inventories = await Promise.all(files.map(f => fetch("state/packages/" + f.name).then(r => r.json())));
+}
+// hot packages of one project (or all)
+const hotCount = repo => Object.keys(hotp).filter(k => !repo || k.startsWith(repo + "|")).length;
+
+function dayAxis(rangeDays) {
+  const out = [], end = new Date(new Date().toISOString().slice(0, 10));
+  for (let d = rangeDays - 1; d >= 0; d--) out.push(new Date(end - d * DAY).toISOString().slice(0, 10));
+  return out;
+}
+
+// value per day = last scan at or before that day (carried forward); null before the first scan
+function series(st, axis) {
+  const out = Object.fromEntries(SEVS.map(s => [s, []]));
+  let i = 0, last = null;
+  for (const d of axis) {
+    while (i < st.scans.length && day(st.scans[i].t) <= d) last = st.scans[i++];
+    for (const s of SEVS) out[s].push(last ? last.counts[s] || 0 : null);
+  }
+  return out;
+}
+
+function weekly(sel, axis) {
+  const weeks = [], start = new Date(axis[0]);
+  for (let t = +start; t <= Date.now(); t += 7 * DAY) weeks.push(new Date(t).toISOString().slice(0, 10));
+  const idx = d => Math.min(weeks.length - 1, Math.floor(days(axis[0], d) / 7));
+  const fresh = weeks.map(() => 0), fixed = weeks.map(() => 0);
+  for (const st of sel) {
+    const firstScan = st.scans[0] && day(st.scans[0].t);
+    for (const f of [...Object.values(st.open), ...st.closed])
+      if (day(f.first) >= axis[0] && day(f.first) !== firstScan) fresh[idx(day(f.first))]++;  // first scan = backlog, not "new"
+    for (const c of st.closed) if (!c.removed && day(c.closed) >= axis[0]) fixed[idx(day(c.closed))]++;
+  }
+  return { weeks, fresh, fixed };
+}
+
+function render() {
+  if (location.hash.startsWith("#packages")) return renderPackages();
+  if (location.hash.startsWith("#settings")) return renderSettings();
+  document.getElementById("dash").hidden = false;
+  const repo = decodeURIComponent(location.hash.slice(1));
+  const sel = repo ? states.filter(s => s.repo === repo) : states;
+  const range = +document.getElementById("range").value;
+  const axis = dayAxis(range);
+  document.getElementById("title").textContent = repo || "Vulnerability Dashboard";
+  document.getElementById("back").hidden = !repo;
+
+  if (!sel.length) {
+    document.getElementById("tiles").innerHTML = "";
+    document.getElementById("tables").innerHTML = `<div class="card empty">No scan data yet. Results appear after the first security scan on main publishes.</div>`;
+    return;
+  }
+
+  const open = sel.flatMap(s => Object.values(s.open).map(f => ({ ...f, repo: s.repo })));
+  const closed = sel.flatMap(s => s.closed.map(c => ({ ...c, repo: s.repo })))
+    .filter(c => !c.removed && day(c.closed) >= axis[0]);
+  const ch = s => ["CRITICAL", "HIGH"].includes(s.sev);
+  const tiles = [
+    ["Exploited / watched", hotCount(repo), hot.schedule === "off" ? "checks disabled in Settings" : hot.updated ? `packages, feeds ${day(hot.updated)}${hot.errors.length ? `, ${hot.errors.length} failing` : ""}` : "no feed data yet", "#packages?" + new URLSearchParams(Object.entries({ repo, hot: 1 }).filter(([, v]) => v))],
+    ["Open critical", open.filter(f => f.sev === "CRITICAL").length, `${open.filter(f => f.sev === "CRITICAL" && f.fix).length} with a fix available`, pkgLink("CRITICAL", repo)],
+    ["Open high", open.filter(f => f.sev === "HIGH").length, `${open.filter(f => f.sev === "HIGH" && f.fix).length} with a fix available`, pkgLink("HIGH", repo)],
+    ["Median time to patch", fmtDays(median(closed.filter(ch).map(ttp))), `critical + high, last ${range} days`],
+    ["Patched", closed.length, `findings closed, last ${range} days`],
+    ["Oldest fixable open", fmtDays(Math.max(0, ...open.filter(f => f.fix && ch(f)).map(f => days(f.fix_first || f.first, new Date().toISOString())))), "critical + high, since fix appeared"],
+  ];
+  document.getElementById("tiles").innerHTML = tiles.map(([l, v, s, href]) =>
+    `<div class="tile"${l.startsWith("Exploited") && v ? ' style="border-color:var(--crit)"' : ""}><div class="label">${l}</div><div class="value">${href ? `<a href="${href}" title="Show affected packages">${v}</a>` : v}</div><div class="sub">${s}</div></div>`).join("");
+
+  // trend: sum per severity across selected repos (a repo with no scan yet contributes nothing)
+  const per = sel.map(st => series(st, axis));
+  const sum = Object.fromEntries(SEVS.map(s => [s, axis.map((_, i) => {
+    const vals = per.map(p => p[s][i]).filter(v => v != null);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
+  })]));
+  // markers only on days a scan actually ran (values in between are carried forward)
+  const scanDays = new Set(sel.flatMap(st => st.scans.map(x => day(x.t))));
+  const grid = css("--line"), ink2 = css("--ink-2"), card = css("--card");
+  const base = {
+    responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+    plugins: { legend: { position: "bottom", labels: { color: ink2, boxWidth: 10, boxHeight: 10 } } },
+    scales: {
+      x: { ticks: { color: ink2, maxTicksLimit: 8 }, grid: { display: false } },
+      y: { beginAtZero: true, ticks: { color: ink2, precision: 0 }, grid: { color: grid } },
+    },
+  };
+  draw("trend", {
+    type: "line",
+    data: { labels: axis, datasets: [...SEVS].reverse().map(s => ({
+      label: s, data: sum[s], borderColor: css(SEV_VAR[s]), backgroundColor: css(SEV_VAR[s]) + "cc",
+      fill: true, borderWidth: 2, stepped: true, spanGaps: false,
+      pointRadius: ctx => scanDays.has(axis[ctx.dataIndex]) ? 4 : 0, pointHoverRadius: 5,
+      pointBackgroundColor: css(SEV_VAR[s]), pointBorderColor: card, pointBorderWidth: 2,
+    })) },
+    options: { ...base, scales: { ...base.scales, y: { ...base.scales.y, stacked: true } } },
+  });
+  const w = weekly(sel, axis);
+  draw("flow", {
+    type: "bar",
+    data: { labels: w.weeks.map(d => "wk " + d.slice(5)), datasets: [
+      { label: "New", data: w.fresh, backgroundColor: css("--low"), borderRadius: 4, borderColor: card, borderWidth: 1 },
+      { label: "Patched", data: w.fixed, backgroundColor: css("--good"), borderRadius: 4, borderColor: card, borderWidth: 1 },
+    ] },
+    options: base,
+  });
+
+  document.getElementById("tables").innerHTML = repo ? repoTables(open, closed) : projectTable(axis);
+  document.querySelectorAll("table[data-sort]").forEach(sortable);
+}
+
+function draw(id, cfg) {
+  charts[id]?.destroy();
+  charts[id] = new Chart(document.getElementById(id), cfg);
+}
+
+function projectTable(axis) {
+  const rows = states.map(st => {
+    const last = st.scans[st.scans.length - 1] || { counts: {}, fixable: {}, failed: [] };
+    const fixable = SEVS.reduce((a, s) => a + (last.fixable[s] || 0), 0);
+    const ttps = st.closed.filter(c => !c.removed && day(c.closed) >= axis[0] && ["CRITICAL", "HIGH"].includes(c.sev)).map(ttp);
+    const m = median(ttps);
+    const nh = hotCount(st.repo);
+    return `<tr${nh ? ' class="hotrow"' : ""}>
+      <td><a href="#${encodeURIComponent(st.repo)}">${esc(st.repo)}</a>${last.failed?.length ? ` <span class="muted" title="${esc(last.failed.join(", "))}">(${last.failed.length} image scan failed)</span>` : ""}</td>
+      ${SEVS.map(s => `<td class="num">${last.counts[s] ? `<a href="${pkgLink(s, st.repo)}">${last.counts[s]}</a>` : 0}</td>`).join("")}
+      <td class="num">${nh ? `<a href="#packages?${new URLSearchParams({ repo: st.repo, hot: 1 })}">${nh}</a>` : 0}</td>
+      <td class="num">${fixable}</td>
+      <td class="num" data-v="${m ?? -1}">${fmtDays(m)}</td>
+      <td data-v="${st.updated}">${st.updated ? day(st.updated) : "–"}</td>
+    </tr>`;
+  }).join("");
+  return `<div class="card"><h2>Projects</h2><table data-sort><thead><tr>
+    <th>Project</th>${SEVS.map(s => `<th class="num">${s[0] + s.slice(1).toLowerCase()}</th>`).join("")}
+    <th class="num">Exploited</th><th class="num">Fixable</th><th class="num">Median patch (C+H)</th><th>Last scan</th>
+  </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function repoTables(open, closed) {
+  const now = new Date().toISOString();
+  const hrank = f => hotOf(f.id, f.pkg) ? -1 : rank(f.sev);
+  const openRows = open.sort((a, b) => hrank(a) - hrank(b) || rank(a.sev) - rank(b.sev) || a.first.localeCompare(b.first)).map(f => `<tr data-fix="${f.fix ? 1 : 0}"${hotOf(f.id, f.pkg) ? ' class="hotrow"' : ""}>
+    <td data-v="${hrank(f)}">${sevCell(f.sev)}${hotBadge(hotOf(f.id, f.pkg))}</td><td>${cveLink(f.id)}</td><td><a href="#packages?exact=1&q=${encodeURIComponent(f.pkg)}">${esc(f.pkg)}</a></td>
+    <td>${esc(f.ver)}</td><td>${f.fix ? esc(f.fix) : '<span class="muted">no fix</span>'}</td>
+    <td>${esc(f.img)}</td><td class="num" data-v="${days(f.first, now)}">${fmtDays(days(f.first, now))}</td>
+    <td class="wrap">${esc(f.title)}</td></tr>`).join("");
+  const closedRows = closed.sort((a, b) => b.closed.localeCompare(a.closed)).map(c => `<tr>
+    <td data-v="${rank(c.sev)}">${sevCell(c.sev)}</td><td>${cveLink(c.id)}</td><td>${esc(c.pkg)}</td>
+    <td>${esc(c.img)}</td><td>${day(c.closed)}</td><td class="num" data-v="${ttp(c)}">${fmtDays(ttp(c))}</td></tr>`).join("");
+  return `<div class="card"><h2>Open findings (${open.length})
+      <label class="muted" style="font-weight:400;margin-left:12px"><input type="checkbox" id="fixonly"> fixable only</label></h2>
+    ${open.length ? `<table data-sort id="opentbl"><thead><tr><th>Severity</th><th>ID</th><th>Package</th><th>Installed</th><th>Fixed in</th><th>Image</th><th class="num">Age</th><th>Title</th></tr></thead><tbody>${openRows}</tbody></table>` : '<div class="empty">Nothing open 🎉</div>'}
+  </div>
+  <div class="card"><h2>Patched in range (${closed.length})</h2>
+    ${closed.length ? `<table data-sort><thead><tr><th>Severity</th><th>ID</th><th>Package</th><th>Image</th><th>Patched</th><th class="num">Time to patch</th></tr></thead><tbody>${closedRows}</tbody></table>` : '<div class="empty">Nothing patched in this range yet.</div>'}
+  </div>`;
+}
+
+// ── Packages: latest inventory per image, searchable across projects ──
+async function renderPackages() {
+  document.getElementById("dash").hidden = true;
+  document.getElementById("title").textContent = "Packages";
+  document.getElementById("back").hidden = false;
+  const params = new URLSearchParams(location.hash.split("?")[1] || "");
+  const tables = document.getElementById("tables");
+  if (!inventories) {
+    tables.innerHTML = '<div class="card empty">Loading packages…</div>';
+    await loadInventories();
+  }
+  const vuln = {};  // repo|image|package -> open findings on it
+  for (const st of states) for (const f of Object.values(st.open)) {
+    const v = vuln[`${st.repo}|${f.img}|${f.pkg}`] ||= { n: 0, worst: "UNKNOWN", fix: 0, by: {} };
+    v.n++; if (f.fix) v.fix++;
+    v.by[f.sev] = (v.by[f.sev] || 0) + 1;
+    if (rank(f.sev) < rank(v.worst)) v.worst = f.sev;
+  }
+  const rows = inventories.flatMap(inv => Object.entries(inv.images).flatMap(([img, d]) =>
+    d.pkgs.map(([name, ver, type]) => ({ name, ver, type, repo: inv.repo, img, v: vuln[`${inv.repo}|${img}|${name}`], hot: hotp[`${inv.repo}|${img}|${name}`] }))))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.repo.localeCompare(b.repo));
+  const repos = [...new Set(rows.map(r => r.repo))].sort();
+  const ALL_SEVS = [...SEVS, "UNKNOWN"];
+  // severity filter: none ticked = all packages; ticked = only packages with open findings at those severities
+  const sevSel = new Set(params.get("vuln") ? ALL_SEVS : (params.get("sev") || "").split(",").filter(Boolean));
+  tables.innerHTML = `<div class="card">
+    <div class="filters" style="flex-wrap:wrap;margin-bottom:12px">
+      <input id="pq" type="search" placeholder="Search package, e.g. openssl" value="${esc(params.get("q") || "")}" style="min-width:240px">
+      <select id="prepo"><option value="">All projects</option>${repos.map(r => `<option ${r === params.get("repo") ? "selected" : ""}>${esc(r)}</option>`).join("")}</select>
+      <span id="psev" style="display:inline-flex;flex-wrap:wrap;gap:10px">${ALL_SEVS.map(sv =>
+        `<label><input type="checkbox" value="${sv}" ${sevSel.has(sv) ? "checked" : ""}> ${sevCell(sv, sv[0] + sv.slice(1).toLowerCase())}</label>`).join("")}</span>
+      <label><input type="checkbox" id="phot" ${params.get("hot") ? "checked" : ""}> <span class="hot">EXPLOITED</span> only</label>
+    </div>
+    <div id="psummary" class="muted" style="margin-bottom:8px"></div>
+    <div id="ptable"></div></div>`;
+  const LIMIT = 500;
+  let exact = !!params.get("exact");  // set by clicking a package name, cleared by typing
+  const update = () => {
+    const q = document.getElementById("pq").value.trim().toLowerCase();
+    const repo = document.getElementById("prepo").value;
+    const sevs = [...document.querySelectorAll("#psev input:checked")].map(i => i.value);
+    const hotOnly = document.getElementById("phot").checked;
+    history.replaceState(null, "", "#packages?" + new URLSearchParams(Object.entries({ exact: exact && q ? 1 : "", q, repo, sev: sevs.join(","), hot: hotOnly ? 1 : "" }).filter(([, v]) => v)));
+    const hit = n => exact ? n.toLowerCase() === q : n.toLowerCase().includes(q);
+    const nSel = r => r.v ? (sevs.length ? sevs : ALL_SEVS).reduce((a, sv) => a + (r.v.by[sv] || 0), 0) : 0;
+    const hits = rows.filter(r => (!q || hit(r.name)) && (!repo || r.repo === repo) && (!sevs.length || nSel(r)) && (!hotOnly || r.hot));
+    // versions in use for the search: the "what do I have where" answer
+    const vers = {};
+    if (q) for (const r of hits) (vers[`${r.name} ${r.ver}`] ||= new Set()).add(r.repo);
+    const vlist = Object.entries(vers);
+    document.getElementById("psummary").innerHTML = `${hits.length} package${hits.length === 1 ? "" : "s"} in ${new Set(hits.map(r => r.repo + r.img)).size} images` +
+      (exact && q ? ` · exact match, type to search partially` : "") +
+      (q && vlist.length <= 30 ? `<br>${vlist.map(([k, p]) => `<b>${esc(k)}</b> (${[...p].map(esc).join(", ")})`).join(" · ")}` : "");
+    document.getElementById("ptable").innerHTML = hits.length ? `<table data-sort><thead><tr>
+      <th>Package</th><th>Version</th><th>Type</th><th>Project</th><th>Image</th><th>Open findings</th></tr></thead><tbody>
+      ${hits.slice(0, LIMIT).map(r => `<tr${r.hot ? ' class="hotrow"' : ""}><td><a href="#" data-pkg="${esc(r.name)}">${esc(r.name)}</a></td><td>${esc(r.ver)}</td><td class="muted">${esc(r.type)}</td>
+        <td><a href="#${encodeURIComponent(r.repo)}">${esc(r.repo)}</a></td><td>${esc(r.img)}</td>
+        <td data-v="${r.hot ? -1 : r.v ? rank(r.v.worst) : 99}">${r.v ? `${sevCell(r.v.worst)} ${nSel(r)}${sevs.length && nSel(r) !== r.v.n ? ` <span class="muted">of ${r.v.n}</span>` : ""} <span class="muted">(${r.v.fix} fixable)</span>` : '<span class="muted">–</span>'}${hotBadge(r.hot)}</td></tr>`).join("")}
+      </tbody></table>${hits.length > LIMIT ? `<div class="empty">Showing ${LIMIT} of ${hits.length}, refine the search.</div>` : ""}`
+      : `<div class="empty">${inventories.length ? "No matching packages." : "No package data yet. It appears after the next scan of each project."}</div>`;
+    document.querySelectorAll("#ptable table[data-sort]").forEach(sortable);
+  };
+  ["prepo", "psev", "phot"].forEach(id => document.getElementById(id).addEventListener("input", update));
+  document.getElementById("pq").addEventListener("input", () => { exact = false; update(); });
+  // package name click: exact search for it across all projects
+  document.getElementById("ptable").addEventListener("click", e => {
+    const a = e.target.closest("a[data-pkg]");
+    if (!a) return;
+    e.preventDefault();
+    document.getElementById("pq").value = a.dataset.pkg;
+    document.getElementById("prepo").value = "";
+    document.querySelectorAll("#psev input, #phot").forEach(i => i.checked = false);
+    exact = true;
+    update();
+    scrollTo({ top: 0 });
+  });
+  update();
+}
+
+// ── Settings: feed schedule, feeds, watchlist and login, saved by app/app.py ──
+const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+async function renderSettings() {
+  document.getElementById("dash").hidden = true;
+  document.getElementById("title").textContent = "Settings";
+  document.getElementById("back").hidden = false;
+  const tables = document.getElementById("tables");
+  const res = await fetch("api/sources").catch(() => null);
+  if (res?.status === 401) return location.assign("login.html?next=" + encodeURIComponent("/#settings"));
+  if (!res?.ok) { tables.innerHTML = '<div class="card empty">Could not load settings from the server.</div>'; return; }
+  const cfg = await res.json();
+  const auth = await fetch("api/auth").then(r => r.json()).catch(() => ({ lock: "off", user: "", logged_in: false }));
+  const m = (cfg.schedule || "").toLowerCase().match(/^(?:every (\d+) ?([mh])|daily (\d{1,2}:\d\d)|weekly (\w+) (\d{1,2}:\d\d)|(manual|off))$/) || [];
+  const kind = m[6] || (m[3] ? "daily" : m[4] ? "weekly" : "every");
+  const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${label}</option>`;
+  const del = '<td><button type="button" data-del title="Remove">✕</button></td>';
+  const feedRow = (f = {}) => `<tr><td><input name="enabled" type="checkbox" title="On / off" ${f.enabled !== false ? "checked" : ""}></td><td><input name="name" value="${esc(f.name)}" placeholder="Name" required></td>
+    <td><select name="type">${opt("kev", "CISA KEV JSON", f.type)}${opt("text", "Page / RSS (every CVE ID in it)", f.type || "text")}</select></td>
+    <td style="width:100%"><input name="url" type="url" value="${esc(f.url)}" placeholder="https://…" required></td>${del}</tr>`;
+  const watchRow = (w = {}) => `<tr><td><select name="kind">${opt("cve", "CVE", w.pkg ? "pkg" : "cve")}${opt("pkg", "Package", w.pkg ? "pkg" : "cve")}</select></td>
+    <td><input name="value" value="${esc(w.cve || w.pkg)}" placeholder="CVE-2024-4577 or php8.2-cli" required></td>
+    <td style="width:100%"><input name="note" value="${esc(w.note)}" placeholder="Note, shown on hover"></td>${del}</tr>`;
+  tables.innerHTML = `<form id="srcform">
+    <div class="card"><h2>Check feeds</h2><div class="filters">
+      <select id="skind">${opt("every", "Every", kind)}${opt("daily", "Daily at", kind)}${opt("weekly", "Weekly on", kind)}${opt("manual", "Manual only (Check now)", kind)}${opt("off", "Disabled", kind)}</select>
+      <span data-k="every"><input id="sn" type="number" min="1" value="${m[1] || 6}" style="width:70px"> <select id="su">${opt("h", "hours", m[2] || "h")}${opt("m", "minutes (15 or more)", m[2])}</select></span>
+      <span data-k="weekly"><select id="sday">${WEEKDAYS.map(d => opt(d, d[0].toUpperCase() + d.slice(1), m[4] || "mon")).join("")}</select> at</span>
+      <span data-k="daily weekly"><input id="stime" type="time" value="${(m[3] || m[5] || "06:00").padStart(5, "0")}"></span>
+      <span class="muted" data-k="every daily weekly">server time</span>
+    </div><div id="sstatus" class="muted" style="margin-top:8px"></div></div>
+    <div class="card"><h2>Feeds</h2><div class="muted" style="margin-bottom:8px">Every CVE these list is marked EXPLOITED. For "Page / RSS", use sources that only list exploited CVEs. Untick a feed to switch it off without deleting it.</div>
+      <table><tbody id="feeds">${(cfg.feeds || []).map(feedRow).join("")}</tbody></table>
+      <button type="button" id="addfeed">+ Add feed</button></div>
+    <div class="card"><h2>Watchlist</h2><div class="muted" style="margin-bottom:8px">For day 0, before any feed lists it. A package matches its exact name in every project and version, even without a finding. Remove it once patched.</div>
+      <table><tbody id="watch">${(cfg.watch || []).map(watchRow).join("")}</tbody></table>
+      <button type="button" id="addwatch">+ Add entry</button></div>
+    <div class="filters"><button class="primary">Save</button><button type="button" id="runnow">Check now</button><span id="smsg"></span></div>
+  </form>
+  <form id="authform" class="card" style="margin-top:16px"><h2>Login</h2>
+    <div class="muted" style="margin-bottom:8px">Lock with your own username and password (a login page asks for them, Log out in the header). The password is stored only as a salted hash.
+      Simple single-user lock for home use: if you run Authentik or a similar tool (Authelia, oauth2-proxy), prefer that in front of the dashboard
+      (per-user accounts, 2FA, audit log) and leave this on "No login".
+      Forgot it? <a href="reset.html">Reset with a code from the server log</a>, or on the server: <code>docker exec -it vuln-dashboard python3 /app/app.py passwd</code></div>
+    <div class="filters">
+      <select id="alock">${opt("off", "No login", auth.lock)}${opt("edit", "Login to change Settings", auth.lock)}${opt("all", "Login for the whole dashboard", auth.lock)}</select>
+      <span data-a><input id="auser" autocomplete="username" placeholder="Username" value="${esc(auth.user)}" style="width:140px"></span>
+      <span data-a><input id="apw" type="password" autocomplete="new-password" placeholder="${auth.user ? "New password (empty = keep)" : "Password, 8+ characters"}" style="width:200px"></span>
+      <span data-a><input id="apw2" type="password" autocomplete="new-password" placeholder="Repeat password" style="width:160px"></span>
+      <button>Save login</button><span id="amsg"></span>
+    </div>
+  </form>`;
+  const $ = id => document.getElementById(id);
+  const showKind = () => document.querySelectorAll("[data-k]").forEach(el => el.hidden = !el.dataset.k.split(" ").includes($("skind").value));
+  const status = () => $("sstatus").textContent = hot.schedule === "off" ? "Disabled: feeds are not checked and nothing is marked."
+    : hot.updated
+    ? `Last check ${hot.updated.slice(0, 16).replace("T", " ")}, next ${hot.next ? hot.next.slice(0, 16).replace("T", " ") : hot.schedule === "manual" ? "only on Check now" : "–"}. ${Object.keys(hot.cves).length} CVEs listed.`
+      + (hot.errors.length ? ` Failing: ${hot.errors.join("; ")}` : "")
+    : "Not checked yet.";
+  showKind(); status();
+  const showAuth = () => document.querySelectorAll("[data-a]").forEach(el => el.hidden = $("alock").value === "off");
+  showAuth();
+  $("alock").addEventListener("change", showAuth);
+  $("authform").addEventListener("submit", async e => {
+    e.preventDefault();
+    if ($("apw").value !== $("apw2").value) { $("amsg").textContent = "Passwords don't match."; return; }
+    const r = await fetch("api/auth", { method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lock: $("alock").value, user: $("auser").value, password: $("apw").value }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { $("amsg").textContent = j.error || `Save failed (${r.status})`; return; }
+    // reload: header (Log out) and this card show the new state
+    $("amsg").textContent = j.lock === "off" ? "Login removed." : "Saved. You stay logged in here; other browsers need the new login.";
+    setTimeout(() => location.reload(), 1500);
+  });
+  $("skind").addEventListener("change", showKind);
+  $("addfeed").addEventListener("click", () => $("feeds").insertAdjacentHTML("beforeend", feedRow()));
+  $("addwatch").addEventListener("click", () => $("watch").insertAdjacentHTML("beforeend", watchRow()));
+  $("srcform").addEventListener("click", e => e.target.closest("[data-del]")?.closest("tr").remove());
+  // wait for the run the save/check triggered, then reload everything so the red marks update
+  const refresh = async msg => {
+    $("smsg").textContent = msg;
+    const before = hot.updated;
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const h = await fetch("state/hot/exploited.json").then(r => r.json()).catch(() => null);
+      if (h && h.updated !== before) { hotp = {}; return load(); }
+    }
+    $("smsg").textContent = "Saved, but no feed check finished within 2 minutes. See the container log.";
+  };
+  $("runnow").addEventListener("click", async () => {
+    const r = await fetch("api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    r.ok ? refresh("Checking feeds…") : $("smsg").textContent = (await r.json().catch(() => ({}))).error || "Could not start a check.";
+  });
+  $("srcform").addEventListener("submit", async e => {
+    e.preventDefault();
+    const k = $("skind").value, t = $("stime").value;
+    const body = {
+      schedule: k === "every" ? `every ${$("sn").value}${$("su").value}` : k === "daily" ? `daily ${t}` : k === "weekly" ? `weekly ${$("sday").value} ${t}` : k,
+      feeds: [...$("feeds").rows].map(tr => ({ enabled: tr.querySelector("[name=enabled]").checked, name: tr.querySelector("[name=name]").value, type: tr.querySelector("[name=type]").value, url: tr.querySelector("[name=url]").value })),
+      watch: [...$("watch").rows].map(tr => ({ [tr.querySelector("[name=kind]").value]: tr.querySelector("[name=value]").value, note: tr.querySelector("[name=note]").value })),
+    };
+    const r = await fetch("api/sources", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) { $("smsg").textContent = (await r.json().catch(() => ({}))).error || `Save failed (${r.status})`; return; }
+    refresh("Saved. Checking feeds…");
+  });
+}
+
+function sortable(tbl) {
+  tbl.querySelectorAll("th").forEach((th, i) => th.addEventListener("click", () => {
+    const dir = th.dataset.dir = th.dataset.dir === "asc" ? "desc" : "asc";
+    const val = tr => { const td = tr.children[i]; return td.dataset.v ?? td.textContent.trim(); };
+    const rows = [...tbl.tBodies[0].rows].sort((a, b) => {
+      const x = val(a), y = val(b), nx = parseFloat(x), ny = parseFloat(y);
+      const c = !isNaN(nx) && !isNaN(ny) ? nx - ny : x.localeCompare(y);
+      return dir === "asc" ? c : -c;
+    });
+    tbl.tBodies[0].append(...rows);
+  }));
+}
+
+document.addEventListener("change", e => {
+  if (e.target.id === "range") render();
+  if (e.target.id === "fixonly") document.querySelectorAll("#opentbl tbody tr").forEach(tr => tr.hidden = e.target.checked && tr.dataset.fix === "0");
+});
+window.addEventListener("hashchange", render);
+document.getElementById("logout").addEventListener("click", async e => {
+  e.preventDefault();
+  await fetch("api/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
+  location.assign("./");
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+load().catch(err => {
+  document.getElementById("tables").innerHTML = `<div class="card empty">Could not load data: ${esc(err.message)}</div>`;
+});
+</script>
+</body>
+</html>

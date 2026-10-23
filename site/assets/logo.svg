@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Vulnerability Dashboard">
+  <rect width="64" height="64" rx="14" fill="#1f2430" stroke="none"/>
+  <path d="M32 8 52 15v16c0 13-9 21-20 25-11-4-20-12-20-25V15z" fill="none" stroke="#e8eaf0" stroke-width="3.5" stroke-linejoin="round"/>
+  <rect x="21" y="23" width="6" height="19" rx="1.5" fill="#d03b3b" stroke="none"/>
+  <rect x="29" y="29" width="6" height="13" rx="1.5" fill="#ec835a" stroke="none"/>
+  <rect x="37" y="35" width="6" height="7" rx="1.5" fill="#fab219" stroke="none"/>
+</svg>

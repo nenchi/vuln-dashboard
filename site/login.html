@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log In</title>
+<!-- served without the login (app.py OPEN) -->
+<style>
+  :root { --bg: #fcfcfb; --card: #ffffff; --ink: #1a1a19; --muted: #8a8a83; --line: #e6e6e1; --link: #2457c5; --crit: #d03b3b; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1a1a19; --card: #232321; --ink: #f0f0ec; --muted: #85857e; --line: #34342f; --link: #8fb0ff; }
+  }
+  :root[data-theme="dark"] { --bg: #1a1a19; --card: #232321; --ink: #f0f0ec; --muted: #85857e; --line: #34342f; --link: #8fb0ff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, sans-serif; }
+  main { max-width: 360px; margin: 64px auto; padding: 0 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p { color: var(--muted); margin: 0 0 8px; }
+  a { color: var(--link); text-decoration: none; }
+  label { display: block; margin: 10px 0 4px; }
+  input, button { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; width: 100%; }
+  button { cursor: pointer; margin-top: 16px; background: var(--link); border-color: var(--link); color: #fff; }
+  #msg { color: var(--crit); margin-top: 12px; min-height: 1.4em; }
+</style>
+</head>
+<body>
+<main><form class="card" id="f">
+  <h1>Vulnerability Dashboard</h1>
+  <p id="why">Log in to continue.</p>
+  <label for="user">Username</label><input id="user" autocomplete="username" required autofocus>
+  <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" required>
+  <button>Log in</button>
+  <div id="msg"></div>
+  <p><a href="reset.html">Forgot the login?</a></p>
+</form></main>
+<script>
+const $ = id => document.getElementById(id);
+// back to where the login was asked for; same-site paths only
+const next = new URLSearchParams(location.search).get("next") || "/";
+const target = /^\/(?![\/\\])/.test(next) ? next : "/";
+if (target.includes("#settings")) $("why").textContent = "Log in to change settings.";
+$("f").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("msg").textContent = "";
+  const r = await fetch("api/login", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user: $("user").value, password: $("pw").value }) });
+  if (r.ok) return location.replace(target);
+  $("msg").textContent = (await r.json().catch(() => ({}))).error || `Login failed (${r.status})`;
+  $("pw").select();
+});
+</script>
+</body>
+</html>

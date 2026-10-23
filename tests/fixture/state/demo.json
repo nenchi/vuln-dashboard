@@ -1,0 +1,52 @@
+{
+ "repo": "demo",
+ "updated": "2026-10-01T00:00:00+00:00",
+ "scans": [
+  {
+   "t": "2026-10-01T00:00:00+00:00",
+   "counts": {
+    "CRITICAL": 1,
+    "HIGH": 1,
+    "MEDIUM": 0,
+    "LOW": 0,
+    "UNKNOWN": 0
+   },
+   "fixable": {
+    "CRITICAL": 1,
+    "HIGH": 0,
+    "MEDIUM": 0,
+    "LOW": 0,
+    "UNKNOWN": 0
+   },
+   "images": [
+    "example/app:1.0"
+   ],
+   "failed": []
+  }
+ ],
+ "open": {
+  "example/app|openssl|CVE-2021-44228": {
+   "img": "example/app",
+   "pkg": "openssl",
+   "id": "CVE-2021-44228",
+   "sev": "CRITICAL",
+   "ver": "1.0",
+   "fix": "1.1",
+   "title": "openssl: example finding",
+   "first": "2026-10-01T00:00:00+00:00",
+   "fix_first": null
+  },
+  "example/app|zlib|CVE-2022-37434": {
+   "img": "example/app",
+   "pkg": "zlib",
+   "id": "CVE-2022-37434",
+   "sev": "HIGH",
+   "ver": "1.0",
+   "fix": "",
+   "title": "zlib: example finding",
+   "first": "2026-10-01T00:00:00+00:00",
+   "fix_first": null
+  }
+ },
+ "closed": []
+}
