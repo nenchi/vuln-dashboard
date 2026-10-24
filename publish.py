@@ -165,7 +165,8 @@ def merge(state, scanned, images, failed, now):
 
 def main():
     ref = os.environ.get("GITHUB_REF", "")
-    if ref and ref not in ("refs/heads/main", "refs/heads/master") and not ref.startswith("refs/tags/"):  # tags are releases: scan them
+    # Gitea mode commits to the shared data repo: only main/master and release tags. Local mode writes where told
+    if not STATE_DIR and ref and ref not in ("refs/heads/main", "refs/heads/master") and not ref.startswith("refs/tags/"):
         print(f"Not on the default branch ({ref}), skipping dashboard publish")
         return
     if not REPO:
