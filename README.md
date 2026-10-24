@@ -3,7 +3,7 @@
 **Vulnerability Dashboard for Home Labs**
 
 A small, self-hosted dashboard for the vulnerabilities in your container images. Trivy scans each project's images,
-and the dashboard shows open findings by severity with 90 days of history, new vs. patched per week, time to patch,
+and the dashboard shows open findings by severity with up to 4 years of history, new vs. patched per week, time to patch,
 and a searchable package inventory (SBOM) across all projects. Findings that are **actively exploited in the wild**
 (CISA KEV, your own feeds or a watchlist) are marked red and sorted first.
 
@@ -25,7 +25,7 @@ and a searchable package inventory (SBOM) across all projects. Findings that are
 # compose.yml
 services:
   vuln-dashboard:
-    image: ghcr.io/nenchi/vuln-dashboard:0.1.1
+    image: ghcr.io/nenchi/vuln-dashboard:0.2.0
     container_name: vuln-dashboard
     ports:
       - "8080:80"            # or put it behind your reverse proxy
@@ -52,6 +52,9 @@ two files per project:
 A finding that disappears from the next scan counts as patched. An image that leaves the compose file counts as
 removed, not patched, so it stays out of the time-to-patch numbers.
 
+History (one count per scan) and patched findings are kept for 4 years, the longest range on the dashboard, then
+deleted. Keep less with `KEEP_DAYS`, e.g. `KEEP_DAYS=180`; use the same value in every project that publishes.
+
 Images come from every `compose.yml` / `compose.yaml` below the current folder, or from `IMAGES="img1 img2"`.
 Trivy reads them from the local Docker daemon first (also locally built images, no re-pull) through
 `/var/run/docker.sock`; set `TRIVY_DOCKER_SOCKET` to another path (rootless Docker) or empty to always pull.
@@ -62,7 +65,7 @@ No Git needed. Trivy scans and the result goes straight into the dashboard's `st
 
 ```bash
 # a released version, not main: you're running it as code on your host
-curl -fsSL -o /opt/vuln-dashboard/publish.py https://raw.githubusercontent.com/nenchi/vuln-dashboard/v0.1.1/publish.py
+curl -fsSL -o /opt/vuln-dashboard/publish.py https://raw.githubusercontent.com/nenchi/vuln-dashboard/v0.2.0/publish.py
 
 # scan the images of one compose project
 cd /opt/stacks/immich
@@ -114,7 +117,7 @@ jobs:
           DASH_REPO: you/vuln-data                 # the private data repo
           TRIVY_IMAGE: aquasec/trivy:0.69.3        # pin it; Renovate can bump it
         run: |
-          curl -fsSL https://raw.githubusercontent.com/nenchi/vuln-dashboard/v0.1.1/publish.py | python3 -
+          curl -fsSL https://raw.githubusercontent.com/nenchi/vuln-dashboard/v0.2.0/publish.py | python3 -
 ```
 
 `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY` (the project name on the dashboard) and `GITHUB_REF` are set by Gitea.

@@ -8,7 +8,8 @@ Two ways to deliver (see README):
                   (owner/name of the data repo); GITHUB_REPOSITORY, GITHUB_REF, GITHUB_SERVER_URL are set by Gitea.
   Local / cron:   writes straight into the dashboard's state folder. Env: STATE_DIR, REPO_NAME.
 Images: every compose.y(a)ml below the current folder, or IMAGES="img1 img2" (e.g. from docker ps).
-Optional: TRIVY_IMAGE, TRIVY_CACHE_DIR, TRIVY_DOCKER_SOCKET (default /var/run/docker.sock, "" = always pull).
+Optional: TRIVY_IMAGE, TRIVY_CACHE_DIR, TRIVY_DOCKER_SOCKET (default /var/run/docker.sock, "" = always pull),
+          KEEP_DAYS (history to keep, default 1461 = 4 years, the longest dashboard range).
 """
 import base64
 import datetime as dt
@@ -22,7 +23,7 @@ import urllib.request
 
 DASH_REPO = os.environ.get("DASH_REPO", "")  # Gitea mode: owner/name of the data repo
 STATE_DIR = os.environ.get("STATE_DIR", "")  # local mode: the dashboard's state folder
-KEEP_DAYS = 90  # ponytail: history + closed findings pruned at 90 days; raise if you want a longer window
+KEEP_DAYS = int(os.environ.get("KEEP_DAYS") or 4 * 365 + 1)  # history + closed findings older than this are deleted
 SEVS = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
 
 TRIVY = os.environ.get("TRIVY_IMAGE") or "aquasec/trivy:latest"

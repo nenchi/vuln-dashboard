@@ -23,9 +23,11 @@ assert closed[k(a)]["closed"] == "2026-10-15T00:00:00+00:00" and "removed" not i
 assert closed[k(c)]["removed"] is True
 assert st["scans"][-1]["counts"]["HIGH"] == 1 and st["scans"][-1]["fixable"]["HIGH"] == 1
 
-# retention: 100 days later old scans and closed findings are pruned
-st = publish.merge(st, {k(b): b}, ["app:3"], set(), "2027-01-23T00:00:00+00:00")
-assert len(st["scans"]) == 1 and st["closed"] == []
+# retention: kept for the 4-year range, pruned after it
+st = publish.merge(st, {k(b): b}, ["app:3"], set(), "2030-10-01T00:00:00+00:00")
+assert len(st["scans"]) == 4 and len(st["closed"]) == 2
+st = publish.merge(st, {k(b): b}, ["app:3"], set(), "2030-10-20T00:00:00+00:00")
+assert len(st["scans"]) == 2 and st["closed"] == []  # 2030-10-01 is still inside the window
 assert publish.image_name("ghcr.io/org/app:1.2@sha256:ab") == "ghcr.io/org/app"
 assert publish.image_name("localhost:5000/app:1") == "localhost:5000/app"
 print("ok")
@@ -38,3 +40,13 @@ assert inv["images"]["db"]["pkgs"] == [["glibc", "2.36", "debian"]]
 inv = publish.merge_packages(inv, {"app:2": []}, ["app:2"], "t3")
 assert set(inv["images"]) == {"app"}
 print("ok packages")
+
+# KEEP_DAYS: a shorter window deletes sooner
+publish.KEEP_DAYS = 90
+st = {"repo": "x", "scans": [], "open": {}, "closed": []}
+st = publish.merge(st, {k(a): a}, ["app:1"], set(), "2026-01-01T00:00:00+00:00")
+st = publish.merge(st, {}, ["app:1"], set(), "2026-02-01T00:00:00+00:00")
+assert len(st["scans"]) == 2 and len(st["closed"]) == 1
+st = publish.merge(st, {}, ["app:1"], set(), "2026-05-15T00:00:00+00:00")
+assert len(st["scans"]) == 1 and st["closed"] == []
+print("ok keep days")

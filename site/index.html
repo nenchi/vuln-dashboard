@@ -14,17 +14,17 @@
   :root {
     --bg: #fcfcfb; --card: #ffffff; --ink: #1a1a19; --ink-2: #55554f; --muted: #8a8a83;
     --line: #e6e6e1; --link: #2457c5;
-    --crit: #d03b3b; --high: #ec835a; --med: #fab219; --low: #a3a39b; --good: #0ca30c;
+    --crit: #d03b3b; --high: #ec835a; --med: #fab219; --low: #a3a39b; --unk: #7b8fb8; --good: #0ca30c;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #1a1a19; --card: #232321; --ink: #f0f0ec; --ink-2: #b9b9b2; --muted: #85857e;
-      --line: #34342f; --link: #8fb0ff; --low: #75756e;
+      --line: #34342f; --link: #8fb0ff; --low: #75756e; --unk: #7f93c0;
     }
   }
   :root[data-theme="dark"] {
     --bg: #1a1a19; --card: #232321; --ink: #f0f0ec; --ink-2: #b9b9b2; --muted: #85857e;
-    --line: #34342f; --link: #8fb0ff; --low: #75756e;
+    --line: #34342f; --link: #8fb0ff; --low: #75756e; --unk: #7f93c0;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, sans-serif; }
@@ -84,14 +84,15 @@
       <a href="#packages" id="pkglink">Packages</a>
       <a href="#settings">Settings</a>
       <a href="#" id="logout" hidden>Log out</a>
-      <label>Range <select id="range"><option value="30">30 days</option><option value="90" selected>90 days</option></select></label>
+      <label>Range <select id="range"><option value="30">30 days</option><option value="60">60 days</option><option value="90" selected>90 days</option><option value="180">180 days</option><option value="365">1 year</option><option value="730">2 years</option><option value="1095">3 years</option><option value="1460">4 years</option></select></label>
     </div>
   </header>
   <div id="dash">
   <div class="tiles" id="tiles"></div>
   <div class="grid2">
-    <div class="card"><h2>Open findings by severity</h2><div class="chart"><canvas id="trend"></canvas></div></div>
-    <div class="card"><h2>New vs patched per week</h2><div class="chart"><canvas id="flow"></canvas></div></div>
+    <div class="card"><h2>Open findings by severity <select id="trendmode" style="font-weight:400;margin-left:8px"><option value="stack">Stacked</option><option value="lines">Lines</option></select>
+      <label id="avgwrap" class="muted" style="font-weight:400;margin-left:8px" title="One point per week, the average of its days"><input type="checkbox" id="avg" checked> weekly average</label></h2><div class="chart"><canvas id="trend"></canvas></div></div>
+    <div class="card"><h2 id="flowtitle">New vs patched per week</h2><div class="chart"><canvas id="flow"></canvas></div></div>
   </div>
   </div>
   <div id="tables"></div>
@@ -99,8 +100,9 @@
 </main>
 <script>
 const SEVS = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
+const ALL_SEVS = [...SEVS, "UNKNOWN"];
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const SEV_VAR = { CRITICAL: "--crit", HIGH: "--high", MEDIUM: "--med", LOW: "--low", UNKNOWN: "--low" };
+const SEV_VAR = { CRITICAL: "--crit", HIGH: "--high", MEDIUM: "--med", LOW: "--low", UNKNOWN: "--unk" };
 const DAY = 864e5;
 let states = [], charts = {}, inventories = null;
 // exploited-in-the-wild list from hot.py; hotp = repo|image|package -> {src, note}
@@ -158,19 +160,20 @@ function dayAxis(rangeDays) {
 
 // value per day = last scan at or before that day (carried forward); null before the first scan
 function series(st, axis) {
-  const out = Object.fromEntries(SEVS.map(s => [s, []]));
+  const out = Object.fromEntries(ALL_SEVS.map(s => [s, []]));
   let i = 0, last = null;
   for (const d of axis) {
     while (i < st.scans.length && day(st.scans[i].t) <= d) last = st.scans[i++];
-    for (const s of SEVS) out[s].push(last ? last.counts[s] || 0 : null);
+    for (const s of ALL_SEVS) out[s].push(last ? last.counts[s] || 0 : null);
   }
   return out;
 }
 
-function weekly(sel, axis) {
+// new/patched counts in buckets of `step` days from the start of the axis
+function weekly(sel, axis, step) {
   const weeks = [], start = new Date(axis[0]);
-  for (let t = +start; t <= Date.now(); t += 7 * DAY) weeks.push(new Date(t).toISOString().slice(0, 10));
-  const idx = d => Math.min(weeks.length - 1, Math.floor(days(axis[0], d) / 7));
+  for (let t = +start; t <= Date.now(); t += step * DAY) weeks.push(new Date(t).toISOString().slice(0, 10));
+  const idx = d => Math.min(weeks.length - 1, Math.floor(days(axis[0], d) / step));
   const fresh = weeks.map(() => 0), fixed = weeks.map(() => 0);
   for (const st of sel) {
     const firstScan = st.scans[0] && day(st.scans[0].t);
@@ -215,12 +218,26 @@ function render() {
 
   // trend: sum per severity across selected repos (a repo with no scan yet contributes nothing)
   const per = sel.map(st => series(st, axis));
-  const sum = Object.fromEntries(SEVS.map(s => [s, axis.map((_, i) => {
+  const sum = Object.fromEntries(ALL_SEVS.map(s => [s, axis.map((_, i) => {
     const vals = per.map(p => p[s][i]).filter(v => v != null);
     return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
   })]));
   // markers only on days a scan actually ran (values in between are carried forward)
   const scanDays = new Set(sel.flatMap(st => st.scans.map(x => day(x.t))));
+  // optional above 180 days: one point per 7 days (the last one ends today), the mean of its daily values;
+  // display only, the stored history stays per scan
+  document.getElementById("avgwrap").hidden = range <= 180;
+  let labels = axis, vals = sum, marked = i => scanDays.has(axis[i]);
+  if (range > 180 && document.getElementById("avg").checked) {
+    const wk = [];
+    for (let e = axis.length; e > 0; e -= 7) wk.unshift([Math.max(0, e - 7), e]);
+    labels = wk.map(([, e]) => axis[e - 1]);
+    vals = Object.fromEntries(ALL_SEVS.map(s => [s, wk.map(([a, e]) => {
+      const xs = sum[s].slice(a, e).filter(v => v != null);
+      return xs.length ? Math.round(xs.reduce((x, y) => x + y, 0) / xs.length * 10) / 10 : null;
+    })]));
+    marked = i => axis.slice(...wk[i]).some(d => scanDays.has(d));
+  }
   const grid = css("--line"), ink2 = css("--ink-2"), card = css("--card");
   const base = {
     responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
@@ -230,20 +247,25 @@ function render() {
       y: { beginAtZero: true, ticks: { color: ink2, precision: 0 }, grid: { color: grid } },
     },
   };
+  // stacked areas or one line per severity with its real count; no `stepped`: a step only drops
+  // after the point, so the newest scan showed as a lone dot below an unchanged area
+  const lines = document.getElementById("trendmode").value === "lines";
   draw("trend", {
     type: "line",
-    data: { labels: axis, datasets: [...SEVS].reverse().map(s => ({
-      label: s, data: sum[s], borderColor: css(SEV_VAR[s]), backgroundColor: css(SEV_VAR[s]) + "cc",
-      fill: true, borderWidth: 2, stepped: true, spanGaps: false,
-      pointRadius: ctx => scanDays.has(axis[ctx.dataIndex]) ? 4 : 0, pointHoverRadius: 5,
-      pointBackgroundColor: css(SEV_VAR[s]), pointBorderColor: card, pointBorderWidth: 2,
+    data: { labels, datasets: [...ALL_SEVS].reverse().map(s => ({
+      label: s, data: vals[s], borderColor: css(SEV_VAR[s]), backgroundColor: css(SEV_VAR[s]) + (lines ? "" : "cc"),
+      fill: !lines, borderWidth: 2, spanGaps: false,
+      pointRadius: ctx => marked(ctx.dataIndex) ? (range > 180 ? 2 : 4) : 0, pointHoverRadius: 5,
+      pointBackgroundColor: css(SEV_VAR[s]), pointBorderColor: card, pointBorderWidth: range > 180 ? 1 : 2,
     })) },
-    options: { ...base, scales: { ...base.scales, y: { ...base.scales.y, stacked: true } } },
+    options: { ...base, scales: { ...base.scales, y: { ...base.scales.y, stacked: !lines } } },
   });
-  const w = weekly(sel, axis);
+  const step = range > 365 ? 28 : 7;
+  document.getElementById("flowtitle").textContent = `New vs patched per ${step === 7 ? "week" : "4 weeks"}`;
+  const w = weekly(sel, axis, step);
   draw("flow", {
     type: "bar",
-    data: { labels: w.weeks.map(d => "wk " + d.slice(5)), datasets: [
+    data: { labels: w.weeks.map(d => range > 365 ? d : "wk " + d.slice(5)), datasets: [
       { label: "New", data: w.fresh, backgroundColor: css("--low"), borderRadius: 4, borderColor: card, borderWidth: 1 },
       { label: "Patched", data: w.fixed, backgroundColor: css("--good"), borderRadius: 4, borderColor: card, borderWidth: 1 },
     ] },
@@ -275,7 +297,7 @@ function projectTable(axis) {
       <td data-v="${st.updated}">${st.updated ? day(st.updated) : "–"}</td>
     </tr>`;
   }).join("");
-  return `<div class="card"><h2>Projects</h2><table data-sort><thead><tr>
+  return `<div class="card"><h2>Projects${states.length > 5 ? ` (${states.length})` : ""}</h2><table data-sort><thead><tr>
     <th>Project</th>${SEVS.map(s => `<th class="num">${s[0] + s.slice(1).toLowerCase()}</th>`).join("")}
     <th class="num">Exploited</th><th class="num">Fixable</th><th class="num">Median patch (C+H)</th><th>Last scan</th>
   </tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -323,7 +345,6 @@ async function renderPackages() {
     d.pkgs.map(([name, ver, type]) => ({ name, ver, type, repo: inv.repo, img, v: vuln[`${inv.repo}|${img}|${name}`], hot: hotp[`${inv.repo}|${img}|${name}`] }))))
     .sort((a, b) => a.name.localeCompare(b.name) || a.repo.localeCompare(b.repo));
   const repos = [...new Set(rows.map(r => r.repo))].sort();
-  const ALL_SEVS = [...SEVS, "UNKNOWN"];
   // severity filter: none ticked = all packages; ticked = only packages with open findings at those severities
   const sevSel = new Set(params.get("vuln") ? ALL_SEVS : (params.get("sev") || "").split(",").filter(Boolean));
   tables.innerHTML = `<div class="card">
@@ -500,7 +521,7 @@ function sortable(tbl) {
 }
 
 document.addEventListener("change", e => {
-  if (e.target.id === "range") render();
+  if (["range", "trendmode", "avg"].includes(e.target.id)) render();
   if (e.target.id === "fixonly") document.querySelectorAll("#opentbl tbody tr").forEach(tr => tr.hidden = e.target.checked && tr.dataset.fix === "0");
 });
 window.addEventListener("hashchange", render);
