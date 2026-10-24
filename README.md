@@ -115,7 +115,7 @@ jobs:
         env:
           VULN_TOKEN: ${{ secrets.VULN_DASHBOARD_TOKEN }}
           DASH_REPO: you/vuln-data                 # the private data repo
-          TRIVY_IMAGE: aquasec/trivy:0.69.3        # pin it; Renovate can bump it
+          TRIVY_IMAGE: aquasec/trivy:0.76.1        # pin it; Renovate can bump it
         run: |
           curl -fsSL https://raw.githubusercontent.com/nenchi/vuln-dashboard/v0.2.0/publish.py | python3 -
 ```
@@ -130,14 +130,14 @@ without pulling the image again, use Trivy directly:
 
 ```bash
 # vulnerabilities of one image, the same scan publish.py runs
-docker run --rm -v trivy-cache:/root/.cache/trivy aquasec/trivy:0.69.3 image --scanners vuln --severity HIGH,CRITICAL nginx:1.27
+docker run --rm -v trivy-cache:/root/.cache/trivy aquasec/trivy:0.76.1 image --scanners vuln --severity HIGH,CRITICAL nginx:1.27
 
 # a CycloneDX SBOM of the image (all packages, versions, licenses)
-docker run --rm -v trivy-cache:/root/.cache/trivy -v "$PWD:/out" aquasec/trivy:0.69.3 \
+docker run --rm -v trivy-cache:/root/.cache/trivy -v "$PWD:/out" aquasec/trivy:0.76.1 \
   image --format cyclonedx --output /out/nginx.cdx.json nginx:1.27
 
 # scan that SBOM later for new vulnerabilities, no image needed
-docker run --rm -v trivy-cache:/root/.cache/trivy -v "$PWD:/out" aquasec/trivy:0.69.3 sbom /out/nginx.cdx.json
+docker run --rm -v trivy-cache:/root/.cache/trivy -v "$PWD:/out" aquasec/trivy:0.76.1 sbom /out/nginx.cdx.json
 ```
 
 ## Exploited in the wild (red marks)

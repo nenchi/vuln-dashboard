@@ -64,7 +64,7 @@ jobs:
           STATE_DIR: /tmp/state
           REPO_NAME: vuln-dashboard
           IMAGES: vuln-dashboard:test
-          TRIVY_IMAGE: aquasec/trivy:0.69.3   # renovate: datasource=docker depName=aquasec/trivy
+          TRIVY_IMAGE: aquasec/trivy:0.76.1   # renovate: datasource=docker depName=aquasec/trivy
         run: |
           python3 publish.py
           python3 tests/selfscan_test.py http://127.0.0.1:8080 vuln-dashboard
