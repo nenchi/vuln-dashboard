@@ -9,7 +9,7 @@
   "platformAutomerge": false,
   "packageRules": [
     {
-      "description": "Python base image patch updates (3.13.8 \u2192 3.13.9): Renovate merges once CI (unit + container tests) is green; the merge makes an automatic patch release",
+      "description": "Python base image patch updates (3.13.8 → 3.13.9) and digest updates (same tag rebuilt with Alpine fixes): Renovate merges once CI (unit + container tests) is green; the merge makes an automatic patch release",
       "matchDatasources": [
         "docker"
       ],
@@ -17,7 +17,8 @@
         "python"
       ],
       "matchUpdateTypes": [
-        "patch"
+        "patch",
+        "digest"
       ],
       "automerge": true,
       "labels": [
@@ -26,7 +27,7 @@
       ]
     },
     {
-      "description": "Python minor/major (3.13 \u2192 3.14, a new language version): PR only, merged by hand after a look",
+      "description": "Python minor/major (3.13 → 3.14, a new language version): PR only, merged by hand after a look",
       "matchDatasources": [
         "docker"
       ],

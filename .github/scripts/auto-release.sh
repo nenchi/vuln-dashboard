@@ -21,9 +21,14 @@ grep -q "^VERSION = \"$new\"" app/app.py || { echo "could not bump VERSION in ap
 # python:3.13.8-alpine -> "Python 3.13.8"; any other base image is shown as is
 name() { case "$1" in python:*) v=${1#python:}; echo "Python ${v%%-*}" ;; *) echo "$1" ;; esac; }
 change="Bump $(name "$old_from") → $(name "$new_from") (base image \`$old_from\` → \`$new_from\`)"
+title="$(name "$old_from") → $(name "$new_from")"
+if [ "${old_from%@*}" = "${new_from%@*}" ]; then  # digest update: same tag, rebuilt upstream with Alpine fixes
+  change="Rebuilt base image \`${new_from%@*}\` (new digest \`${new_from#*@}\`, Alpine package fixes)"
+  title="rebuilt $(name "$new_from") base image"
+fi
 
 git add app/app.py README.md
-git commit -q -m "Release v$new: $(name "$old_from") → $(name "$new_from")"
+git commit -q -m "Release v$new: $title"
 git tag -a "v$new" -m "v$new"
 cat > release-notes.md <<NOTES
 Automatic release after a Renovate update. Unit tests and the container end-to-end test passed before the merge.
