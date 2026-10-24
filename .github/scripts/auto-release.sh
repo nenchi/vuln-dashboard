@@ -30,12 +30,15 @@ fi
 git add app/app.py README.md
 git commit -q -m "Release v$new: $title"
 git tag -a "v$new" -m "v$new"
+# a PR merged by hand is a merge commit: show the PR title, not "Merge pull request #N from ..."
+from=$(git log -1 --format=%s HEAD~1)
+case "$from" in "Merge pull request #"*) n=${from#Merge pull request #}; from="$(git log -1 --format=%b HEAD~1 | head -1) (#${n%% *})" ;; esac
 cat > release-notes.md <<NOTES
 Automatic release after a Renovate update. Unit tests and the container end-to-end test passed before the merge.
 
 ## Changed
 - $change
-- From: $(git log -1 --format=%s HEAD~1)
+- From: $from
 
 Image: \`ghcr.io/${GITHUB_REPOSITORY:-nenchi/vuln-dashboard}:$new\`
 NOTES
