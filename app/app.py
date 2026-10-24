@@ -32,7 +32,7 @@ import urllib.parse
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.3.0"  # bump on release (shown in the dashboard footer and the log)
+VERSION = "0.3.1"  # bump on release (shown in the dashboard footer and the log)
 WEB = os.environ.get("WEB_ROOT", "/srv")  # site/ here, state/ at /srv/state
 HOT = os.path.join(WEB, "state", "hot")
 OUT = os.path.join(HOT, "exploited.json")
