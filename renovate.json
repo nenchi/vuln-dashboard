@@ -9,6 +9,16 @@
   "platformAutomerge": false,
   "packageRules": [
     {
+      "description": "Python: patch PR (3.13.8 → 3.13.17: automerged, automatic release) kept apart from the minor PR (→ 3.15: by hand); without this Renovate only offers the newest minor",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "python"
+      ],
+      "separateMinorPatch": true
+    },
+    {
       "description": "Python base image patch updates (3.13.8 → 3.13.9) and digest updates (same tag rebuilt with Alpine fixes): Renovate merges once CI (unit + container tests) is green; the merge makes an automatic patch release",
       "matchDatasources": [
         "docker"
