@@ -64,8 +64,9 @@ def main():
     # Settings: feeds off (no internet in CI), watch a CVE and a package, run now
     code, body, _ = call(a, "/api/sources", "PUT", {"schedule": "manual", "feeds": [
         {"name": "CISA KEV", "type": "kev", "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json", "enabled": False}],
-        "watch": [{"cve": "CVE-2021-44228", "note": "smoke"}, {"pkg": "php8.2-cli", "note": "smoke"}]})
+        "watch": [{"cve": "CVE-2021-44228", "note": "smoke"}, {"pkg": "php8.2-cli", "note": "smoke"}], "keep_days": 90})
     ok(code == 200, "save settings")
+    ok(json.loads(call(a, "/api/keep")[1]) == {"days": 90, "env": False}, "keep history saved")
     ok(call(a, "/api/sources", "PUT", {"schedule": "every 1m"})[0] == 400, "reject too frequent schedule")
     hot = {}
     for _ in range(20):
@@ -101,6 +102,7 @@ def main():
     ok(call(b, "/api/sources", "PUT", {"schedule": "off"})[0] == 401, "can't change settings without it")
     ok(call(b, "/api/run", "POST", {})[0] == 401, "can't start a check without it")
     ok(json.loads(call(b, "/api/auth")[1]) == {"lock": "all", "logged_in": False, "user": ""}, "lock status open, no username")
+    ok(call(b, "/api/keep")[0] == 200, "keep history open (the Range list needs it)")
     ok(call(b, "/api/reset", "PUT", {"code": "AAAA-BBBB", "user": "x", "password": "12345678"})[0] == 400, "reset needs a requested code")
     ok(call(a, "/api/auth", "PUT", {"lock": "off"})[0] == 200 and call(b, "/")[0] == 200, "login removed, open again")
     print("smoke test passed")

@@ -15,6 +15,7 @@ Format:
               | "manual" (only "Check now") | "off" (no checks, nothing marked)
   "feeds": [{"name", "type", "url", "enabled"}]  type kev = CISA KEV JSON, text = any page/RSS/list (every CVE ID in it counts)
   "watch": [{"cve": "...", "note": "..."} or {"pkg": "...", "note": "..."}]  (package name, all versions)
+  "keep_days": one of KEEP_CHOICES, the longest dashboard range; KEEP_DAYS in the container env overrides it
 """
 import datetime as dt
 import hashlib
@@ -31,7 +32,7 @@ import urllib.parse
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.2.0"  # bump on release (shown in the dashboard footer and the log)
+VERSION = "0.3.0"  # bump on release (shown in the dashboard footer and the log)
 WEB = os.environ.get("WEB_ROOT", "/srv")  # site/ here, state/ at /srv/state
 HOT = os.path.join(WEB, "state", "hot")
 OUT = os.path.join(HOT, "exploited.json")
@@ -43,6 +44,9 @@ DEFAULT_SCHEDULE = "every 6h"
 CVE_RE = re.compile(r"CVE-\d{4}-\d{4,}", re.I)
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 MODES = ("manual", "off")  # schedules without automatic runs
+KEEP_CHOICES = (7, 30, 60, 90, 180, 365, 730, 1095, 1460)  # Settings "Keep history" = the dashboard's ranges
+# set in compose.yml: Settings shows it greyed out. Display only: what's stored is publish.py's KEEP_DAYS (4 years)
+KEEP_ENV = int(os.environ["KEEP_DAYS"]) if os.environ.get("KEEP_DAYS", "").strip() else None
 wake = threading.Event()  # set by a save or "Check now": fetch right away
 
 
@@ -122,7 +126,10 @@ def validate(cfg):
         if bool(cve) == bool(pkg):
             raise ValueError("each watch entry needs either a CVE or a package name")
         watch.append({"cve": cve.upper(), "note": note} if cve else {"pkg": pkg, "note": note})
-    return {"schedule": schedule, "feeds": feeds, "watch": watch}
+    keep = cfg.get("keep_days", KEEP_CHOICES[-1])
+    if keep not in KEEP_CHOICES:
+        raise ValueError(f"keep history must be one of {', '.join(map(str, KEEP_CHOICES))} days")
+    return {"schedule": schedule, "feeds": feeds, "watch": watch, "keep_days": keep}
 
 
 def pw_hash(password, salt):
@@ -261,6 +268,12 @@ def load_sources():
     return read_json(SOURCES, None) or read_json(DEFAULT_SOURCES, {})
 
 
+def keep_days():
+    """longest range the dashboard offers: KEEP_DAYS env, else the Settings value, else 4 years"""
+    keep = load_sources().get("keep_days")
+    return KEEP_ENV or (keep if keep in KEEP_CHOICES else KEEP_CHOICES[-1])
+
+
 def schedule_of(cfg):
     try:
         next_run(cfg.get("schedule", ""), dt.datetime.now())
@@ -294,7 +307,7 @@ def scheduler():
 
 # reachable without the login, per method: login + forgot-login pages and their API calls.
 # Per method on purpose: GET /api/auth (lock status) is open, PUT /api/auth (change the login) never is.
-OPEN = {"GET": ("/login.html", "/reset.html", "/api/version", "/api/auth"),
+OPEN = {"GET": ("/login.html", "/reset.html", "/api/version", "/api/auth", "/api/keep"),
         "POST": ("/api/login", "/api/logout", "/api/reset-code"),
         "PUT": ("/api/reset",)}
 COOKIE = "vd_session"
@@ -376,6 +389,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(200, {"version": VERSION})
         if self.route == "/api/sources":
             return self.send_json(200, load_sources())
+        if self.route == "/api/keep":  # open: the dashboard's Range list needs it even with "Login to change Settings"
+            return self.send_json(200, {"days": keep_days(), "env": KEEP_ENV is not None})
         if self.route == "/api/auth":  # open: the page needs it to show Log out; the username only when logged in
             login = read_json(AUTH, None)
             me = self.logged_in(login)

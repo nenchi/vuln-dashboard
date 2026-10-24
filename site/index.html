@@ -84,7 +84,7 @@
       <a href="#packages" id="pkglink">Packages</a>
       <a href="#settings">Settings</a>
       <a href="#" id="logout" hidden>Log out</a>
-      <label>Range <select id="range"><option value="30">30 days</option><option value="60">60 days</option><option value="90" selected>90 days</option><option value="180">180 days</option><option value="365">1 year</option><option value="730">2 years</option><option value="1095">3 years</option><option value="1460">4 years</option></select></label>
+      <label>Range <select id="range"><option value="7">7 days</option><option value="30">30 days</option><option value="60">60 days</option><option value="90" selected>90 days</option><option value="180">180 days</option><option value="365">1 year</option><option value="730">2 years</option><option value="1095">3 years</option><option value="1460">4 years</option></select></label>
     </div>
   </header>
   <div id="dash">
@@ -105,6 +105,8 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const SEV_VAR = { CRITICAL: "--crit", HIGH: "--high", MEDIUM: "--med", LOW: "--low", UNKNOWN: "--unk" };
 const DAY = 864e5;
 let states = [], charts = {}, inventories = null;
+let keep = { days: 1460, env: false };  // Settings "Keep history" (or KEEP_DAYS in compose.yml): the longest range
+const RANGES = [...document.getElementById("range").options].map(o => ({ value: o.value, label: o.text }));
 // exploited-in-the-wild list from hot.py; hotp = repo|image|package -> {src, note}
 let hot = { cves: {}, pkgs: {}, errors: [] }, hotp = {};
 const rank = s => SEVS.indexOf(s) < 0 ? 9 : SEVS.indexOf(s);
@@ -129,6 +131,12 @@ async function load() {
   states = (await Promise.all(files.map(f => fetch("state/" + f.name).then(r => r.json()))))
     .sort((a, b) => a.repo.localeCompare(b.repo));
   hot = await fetch("state/hot/exploited.json").then(r => r.ok ? r.json() : hot).catch(() => hot);
+  keep = await fetch("api/keep").then(r => r.ok ? r.json() : keep).catch(() => keep);
+  // only ranges up to Keep history (at least the shortest); a range that no longer fits falls back to the longest left
+  const sel = document.getElementById("range"), cur = +sel.value;
+  const fit = RANGES.filter((o, i) => !i || +o.value <= keep.days);
+  sel.innerHTML = fit.map(o => `<option value="${o.value}">${o.label}</option>`).join("");
+  sel.value = fit.some(o => +o.value === cur) ? cur : fit.at(-1).value;
   fetch("api/auth").then(r => r.json()).then(a => document.getElementById("logout").hidden = !a.logged_in).catch(() => {});
   fetch("api/version").then(r => r.json()).then(v => document.getElementById("version").textContent = `vuln-dashboard ${v.version}`).catch(() => {});
   // watched package names can match packages with no finding yet (zero-day), so they need the inventories
@@ -437,6 +445,10 @@ async function renderSettings() {
     <div class="card"><h2>Watchlist</h2><div class="muted" style="margin-bottom:8px">For day 0, before any feed lists it. A package matches its exact name in every project and version, even without a finding. Remove it once patched.</div>
       <table><tbody id="watch">${(cfg.watch || []).map(watchRow).join("")}</tbody></table>
       <button type="button" id="addwatch">+ Add entry</button></div>
+    <div class="card"><h2>Keep history</h2><div class="muted" style="margin-bottom:8px">${keep.env
+      ? `Set by the <code>KEEP_DAYS</code> variable in compose.yml (${keep.days} days). Change it there, or remove it to choose here.`
+      : "The longest range the dashboard offers. Stored data is kept by publish.py (its own KEEP_DAYS, 4 years by default)."}</div>
+      <select id="keep" ${keep.env ? "disabled" : ""}>${keep.env && !RANGES.some(o => +o.value === keep.days) ? opt(keep.days, `${keep.days} days`, keep.days) : ""}${RANGES.map(o => opt(+o.value, o.label, keep.days)).join("")}</select></div>
     <div class="filters"><button class="primary">Save</button><button type="button" id="runnow">Check now</button><span id="smsg"></span></div>
   </form>
   <form id="authform" class="card" style="margin-top:16px"><h2>Login</h2>
@@ -500,9 +512,11 @@ async function renderSettings() {
       schedule: k === "every" ? `every ${$("sn").value}${$("su").value}` : k === "daily" ? `daily ${t}` : k === "weekly" ? `weekly ${$("sday").value} ${t}` : k,
       feeds: [...$("feeds").rows].map(tr => ({ enabled: tr.querySelector("[name=enabled]").checked, name: tr.querySelector("[name=name]").value, type: tr.querySelector("[name=type]").value, url: tr.querySelector("[name=url]").value })),
       watch: [...$("watch").rows].map(tr => ({ [tr.querySelector("[name=kind]").value]: tr.querySelector("[name=value]").value, note: tr.querySelector("[name=note]").value })),
+      keep_days: keep.env ? cfg.keep_days ?? 1460 : +$("keep").value,  // under KEEP_DAYS: keep the saved choice
     };
     const r = await fetch("api/sources", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!r.ok) { $("smsg").textContent = (await r.json().catch(() => ({}))).error || `Save failed (${r.status})`; return; }
+    if (!keep.env) keep.days = body.keep_days;
     refresh("Saved. Checking feeds…");
   });
 }

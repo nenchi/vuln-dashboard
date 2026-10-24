@@ -52,12 +52,14 @@ print("ok")
 ok = hot.validate({"schedule": " daily 06:00 ", "feeds": [{"name": "KEV", "type": "kev", "url": "https://x"}],
                    "watch": [{"cve": "cve-2024-4577", "note": " php "}, {"pkg": "php8.2-cli"}]})
 assert ok == {"schedule": "daily 06:00", "feeds": [{"name": "KEV", "type": "kev", "url": "https://x", "enabled": True}],
-              "watch": [{"cve": "CVE-2024-4577", "note": "php"}, {"pkg": "php8.2-cli", "note": ""}]}
+              "watch": [{"cve": "CVE-2024-4577", "note": "php"}, {"pkg": "php8.2-cli", "note": ""}], "keep_days": 1460}
+assert hot.validate({"schedule": "manual", "keep_days": 7})["keep_days"] == 7
 for bad in [{"schedule": "hourly"}, {"schedule": "every 5m"},
             {"schedule": "every 1h", "feeds": [{"name": "a", "url": "file:///etc/passwd"}]},
             {"schedule": "every 1h", "feeds": [{"name": "a", "url": "https://x"}, {"name": "a", "url": "https://y"}]},
             {"schedule": "every 1h", "watch": [{"cve": "nope"}]},
-            {"schedule": "every 1h", "watch": [{"note": "empty"}]}]:
+            {"schedule": "every 1h", "watch": [{"note": "empty"}]},
+            {"schedule": "manual", "keep_days": 45}, {"schedule": "manual", "keep_days": "90"}]:
     try:
         hot.validate(bad)
         raise AssertionError(bad)
