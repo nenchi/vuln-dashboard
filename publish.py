@@ -27,7 +27,7 @@ KEEP_DAYS = int(os.environ.get("KEEP_DAYS") or 4 * 365 + 1)  # history + closed 
 SEVS = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
 
 TRIVY = os.environ.get("TRIVY_IMAGE") or "aquasec/trivy:latest"
-CACHE = os.environ.get("TRIVY_CACHE_DIR") or "/tmp/trivy-cache"
+CACHE = os.environ.get("TRIVY_CACHE_DIR") or "/var/cache/trivy"  # not /tmp: tmpfs = RAM
 # Trivy reads images from the local Docker daemon through this socket first (locally built images, no re-pull);
 # a path on the Docker host. Set it empty to make Trivy always pull from the registry (rootless Docker: its socket)
 SOCKET = os.environ.get("TRIVY_DOCKER_SOCKET", "/var/run/docker.sock")
