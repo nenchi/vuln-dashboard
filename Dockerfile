@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # stdlib only: no pip install, the base image is the only dependency. Pinned by digest: Renovate also
 # picks up rebuilds of the same tag (Alpine security fixes), each one an automatic patch release
-FROM python:3.15.2-alpine@sha256:1656b7eaf309cadf99069ea9de335c7f67a8355789cfc6f1835a05818996f081
+FROM python:3.15.2-alpine@sha256:20a82dbc2783112ddb91d1534603f802d222a3e63e593cd002eb2ac534e70211
 
 COPY app/ /app/
 COPY site/ /srv/
