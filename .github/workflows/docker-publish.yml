@@ -73,7 +73,7 @@ jobs:
         if: always()
         run: docker logs vd || true
 
-  # A Renovate merge that changed the base image (e.g. Python 3.13.8 → 3.13.9) → next patch release.
+  # A Renovate merge that changed the base image (e.g. Python 3.13.8 → 3.13.9) or Chart.js → next patch release.
   # Renovate merges only after the test job passed on its PR (renovate.json), and test ran again above.
   release:
     needs: test
@@ -90,7 +90,7 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Bump version if the base image changed
+      - name: Bump version if the base image or a cdnjs library changed
         id: bump
         run: |
           git config user.name "github-actions[bot]"

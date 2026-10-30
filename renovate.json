@@ -67,6 +67,17 @@
       "automerge": true
     },
     {
+      "description": "cdnjs libraries in site/index.html (Chart.js) minor/patch: merged once CI is green; the merge makes an automatic patch release (auto-release.sh)",
+      "matchDatasources": [
+        "cdnjs"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "automerge": true
+    },
+    {
       "description": "Trivy (CI self-scan only, not in the image): minor/patch merged after tests, no release",
       "matchPackageNames": [
         "aquasec/trivy"
