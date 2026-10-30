@@ -105,13 +105,15 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const SEV_VAR = { CRITICAL: "--crit", HIGH: "--high", MEDIUM: "--med", LOW: "--low", UNKNOWN: "--unk" };
 const DAY = 864e5;
 let states = [], charts = {}, inventories = null;
-let keep = { days: 1460, env: false };  // Settings "Keep history" (or KEEP_DAYS in compose.yml): the longest range
+let keep = { days: 1460, env: false, stale: 8 };  // Settings "Keep history" (or KEEP_DAYS in compose.yml): the longest range
 const RANGES = [...document.getElementById("range").options].map(o => ({ value: o.value, label: o.text }));
 // exploited-in-the-wild list from hot.py; hotp = repo|image|package -> {src, note}
 let hot = { cves: {}, pkgs: {}, errors: [] }, hotp = {};
 const rank = s => SEVS.indexOf(s) < 0 ? 9 : SEVS.indexOf(s);
 
 const day = t => t.slice(0, 10);
+// localStorage can throw (private window, blocked storage): then nothing is remembered
+const store = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch { return null; } };
 const days = (a, b) => (new Date(b) - new Date(a)) / DAY;
 const median = xs => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const fmtDays = d => d == null ? "–" : d < 1 ? "<1 d" : `${Math.round(d)} d`;
@@ -133,7 +135,7 @@ async function load() {
   hot = await fetch("state/hot/exploited.json").then(r => r.ok ? r.json() : hot).catch(() => hot);
   keep = await fetch("api/keep").then(r => r.ok ? r.json() : keep).catch(() => keep);
   // only ranges up to Keep history (at least the shortest); a range that no longer fits falls back to the longest left
-  const sel = document.getElementById("range"), cur = +sel.value;
+  const sel = document.getElementById("range"), cur = +(store("range") || sel.value);  // last range picked in this browser
   const fit = RANGES.filter((o, i) => !i || +o.value <= keep.days);
   sel.innerHTML = fit.map(o => `<option value="${o.value}">${o.label}</option>`).join("");
   sel.value = fit.some(o => +o.value === cur) ? cur : fit.at(-1).value;
@@ -280,7 +282,7 @@ function render() {
     options: base,
   });
 
-  document.getElementById("tables").innerHTML = repo ? repoTables(open, closed) : projectTable(axis);
+  document.getElementById("tables").innerHTML = repo ? repoTables(repo, open, closed) : projectTable(axis);
   document.querySelectorAll("table[data-sort]").forEach(sortable);
 }
 
@@ -289,6 +291,8 @@ function draw(id, cfg) {
   charts[id] = new Chart(document.getElementById(id), cfg);
 }
 
+// older than Settings "Stale scan" (0 = never)
+const stale = t => keep.stale > 0 && t && days(t, new Date().toISOString()) > keep.stale;
 function projectTable(axis) {
   const rows = states.map(st => {
     const last = st.scans[st.scans.length - 1] || { counts: {}, fixable: {}, failed: [] };
@@ -302,7 +306,7 @@ function projectTable(axis) {
       <td class="num">${nh ? `<a href="#packages?${new URLSearchParams({ repo: st.repo, hot: 1 })}">${nh}</a>` : 0}</td>
       <td class="num">${fixable}</td>
       <td class="num" data-v="${m ?? -1}">${fmtDays(m)}</td>
-      <td data-v="${st.updated}">${st.updated ? day(st.updated) : "–"}</td>
+      <td data-v="${st.updated}"${stale(st.updated) ? ` style="color:var(--crit)" title="No scan for more than ${keep.stale} days (Settings)"` : ""}>${st.updated ? day(st.updated) : "–"}</td>
     </tr>`;
   }).join("");
   return `<div class="card"><h2>Projects${states.length > 5 ? ` (${states.length})` : ""}</h2><table data-sort><thead><tr>
@@ -311,13 +315,14 @@ function projectTable(axis) {
   </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-function repoTables(open, closed) {
+function repoTables(repo, open, closed) {
+  const imgLink = img => `<a href="#packages?${new URLSearchParams({ repo, img })}" title="All packages of this image">${esc(img)}</a>`;
   const now = new Date().toISOString();
   const hrank = f => hotOf(f.id, f.pkg) ? -1 : rank(f.sev);
   const openRows = open.sort((a, b) => hrank(a) - hrank(b) || rank(a.sev) - rank(b.sev) || a.first.localeCompare(b.first)).map(f => `<tr data-fix="${f.fix ? 1 : 0}"${hotOf(f.id, f.pkg) ? ' class="hotrow"' : ""}>
     <td data-v="${hrank(f)}">${sevCell(f.sev)}${hotBadge(hotOf(f.id, f.pkg))}</td><td>${cveLink(f.id)}</td><td><a href="#packages?exact=1&q=${encodeURIComponent(f.pkg)}">${esc(f.pkg)}</a></td>
     <td>${esc(f.ver)}</td><td>${f.fix ? esc(f.fix) : '<span class="muted">no fix</span>'}</td>
-    <td>${esc(f.img)}</td><td class="num" data-v="${days(f.first, now)}">${fmtDays(days(f.first, now))}</td>
+    <td>${imgLink(f.img)}</td><td class="num" data-v="${days(f.first, now)}">${fmtDays(days(f.first, now))}</td>
     <td class="wrap">${esc(f.title)}</td></tr>`).join("");
   const closedRows = closed.sort((a, b) => b.closed.localeCompare(a.closed)).map(c => `<tr>
     <td data-v="${rank(c.sev)}">${sevCell(c.sev)}</td><td>${cveLink(c.id)}</td><td>${esc(c.pkg)}</td>
@@ -359,6 +364,7 @@ async function renderPackages() {
     <div class="filters" style="flex-wrap:wrap;margin-bottom:12px">
       <input id="pq" type="search" placeholder="Search package, e.g. openssl" value="${esc(params.get("q") || "")}" style="min-width:240px">
       <select id="prepo"><option value="">All projects</option>${repos.map(r => `<option ${r === params.get("repo") ? "selected" : ""}>${esc(r)}</option>`).join("")}</select>
+      <select id="pimg"></select>
       <span id="psev" style="display:inline-flex;flex-wrap:wrap;gap:10px">${ALL_SEVS.map(sv =>
         `<label><input type="checkbox" value="${sv}" ${sevSel.has(sv) ? "checked" : ""}> ${sevCell(sv, sv[0] + sv.slice(1).toLowerCase())}</label>`).join("")}</span>
       <label><input type="checkbox" id="phot" ${params.get("hot") ? "checked" : ""}> <span class="hot">EXPLOITED</span> only</label>
@@ -367,15 +373,21 @@ async function renderPackages() {
     <div id="ptable"></div></div>`;
   const LIMIT = 500;
   let exact = !!params.get("exact");  // set by clicking a package name, cleared by typing
+  let img0 = params.get("img") || "";  // image from the link, until the first update
   const update = () => {
     const q = document.getElementById("pq").value.trim().toLowerCase();
     const repo = document.getElementById("prepo").value;
     const sevs = [...document.querySelectorAll("#psev input:checked")].map(i => i.value);
     const hotOnly = document.getElementById("phot").checked;
-    history.replaceState(null, "", "#packages?" + new URLSearchParams(Object.entries({ exact: exact && q ? 1 : "", q, repo, sev: sevs.join(","), hot: hotOnly ? 1 : "" }).filter(([, v]) => v)));
+    // images of the chosen project (or all); a choice not in it falls back to all images
+    const isel = document.getElementById("pimg"), pick = isel.value || img0, imgs = [...new Set(rows.filter(r => !repo || r.repo === repo).map(r => r.img))].sort();
+    isel.innerHTML = `<option value="">All images (${imgs.length})</option>` + imgs.map(i => `<option>${esc(i)}</option>`).join("");
+    const img = isel.value = imgs.includes(pick) ? pick : "";
+    img0 = "";
+    history.replaceState(null, "", "#packages?" + new URLSearchParams(Object.entries({ exact: exact && q ? 1 : "", q, repo, img, sev: sevs.join(","), hot: hotOnly ? 1 : "" }).filter(([, v]) => v)));
     const hit = n => exact ? n.toLowerCase() === q : n.toLowerCase().includes(q);
     const nSel = r => r.v ? (sevs.length ? sevs : ALL_SEVS).reduce((a, sv) => a + (r.v.by[sv] || 0), 0) : 0;
-    const hits = rows.filter(r => (!q || hit(r.name)) && (!repo || r.repo === repo) && (!sevs.length || nSel(r)) && (!hotOnly || r.hot));
+    const hits = rows.filter(r => (!q || hit(r.name)) && (!repo || r.repo === repo) && (!img || r.img === img) && (!sevs.length || nSel(r)) && (!hotOnly || r.hot));
     // versions in use for the search: the "what do I have where" answer
     const vers = {};
     if (q) for (const r of hits) (vers[`${r.name} ${r.ver}`] ||= new Set()).add(r.repo);
@@ -392,7 +404,7 @@ async function renderPackages() {
       : `<div class="empty">${inventories.length ? "No matching packages." : "No package data yet. It appears after the next scan of each project."}</div>`;
     document.querySelectorAll("#ptable table[data-sort]").forEach(sortable);
   };
-  ["prepo", "psev", "phot"].forEach(id => document.getElementById(id).addEventListener("input", update));
+  ["prepo", "pimg", "psev", "phot"].forEach(id => document.getElementById(id).addEventListener("input", update));
   document.getElementById("pq").addEventListener("input", () => { exact = false; update(); });
   // package name click: exact search for it across all projects
   document.getElementById("ptable").addEventListener("click", e => {
@@ -400,7 +412,7 @@ async function renderPackages() {
     if (!a) return;
     e.preventDefault();
     document.getElementById("pq").value = a.dataset.pkg;
-    document.getElementById("prepo").value = "";
+    document.getElementById("prepo").value = document.getElementById("pimg").value = "";
     document.querySelectorAll("#psev input, #phot").forEach(i => i.checked = false);
     exact = true;
     update();
@@ -449,6 +461,8 @@ async function renderSettings() {
       ? `Set by the <code>KEEP_DAYS</code> variable in compose.yml (${keep.days} days). Change it there, or remove it to choose here.`
       : "The longest range the dashboard offers. Stored data is kept by publish.py (its own KEEP_DAYS, 4 years by default)."}</div>
       <select id="keep" ${keep.env ? "disabled" : ""}>${keep.env && !RANGES.some(o => +o.value === keep.days) ? opt(keep.days, `${keep.days} days`, keep.days) : ""}${RANGES.map(o => opt(+o.value, o.label, keep.days)).join("")}</select></div>
+    <div class="card"><h2>Stale scan</h2><div class="muted" style="margin-bottom:8px">A project's "Last scan" date turns red when it is older than this. 0 = never.</div>
+      <input id="stale" type="number" min="0" max="365" step="1" value="${cfg.stale_days ?? keep.stale}" style="width:70px" required> days</div>
     <div class="filters"><button class="primary">Save</button><button type="button" id="runnow">Check now</button><span id="smsg"></span></div>
   </form>
   <form id="authform" class="card" style="margin-top:16px"><h2>Login</h2>
@@ -513,10 +527,12 @@ async function renderSettings() {
       feeds: [...$("feeds").rows].map(tr => ({ enabled: tr.querySelector("[name=enabled]").checked, name: tr.querySelector("[name=name]").value, type: tr.querySelector("[name=type]").value, url: tr.querySelector("[name=url]").value })),
       watch: [...$("watch").rows].map(tr => ({ [tr.querySelector("[name=kind]").value]: tr.querySelector("[name=value]").value, note: tr.querySelector("[name=note]").value })),
       keep_days: keep.env ? cfg.keep_days ?? 1460 : +$("keep").value,  // under KEEP_DAYS: keep the saved choice
+      stale_days: +$("stale").value,
     };
     const r = await fetch("api/sources", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!r.ok) { $("smsg").textContent = (await r.json().catch(() => ({}))).error || `Save failed (${r.status})`; return; }
     if (!keep.env) keep.days = body.keep_days;
+    keep.stale = body.stale_days;
     refresh("Saved. Checking feeds…");
   });
 }
@@ -535,6 +551,7 @@ function sortable(tbl) {
 }
 
 document.addEventListener("change", e => {
+  if (e.target.id === "range") store("range", e.target.value);
   if (["range", "trendmode", "avg"].includes(e.target.id)) render();
   if (e.target.id === "fixonly") document.querySelectorAll("#opentbl tbody tr").forEach(tr => tr.hidden = e.target.checked && tr.dataset.fix === "0");
 });

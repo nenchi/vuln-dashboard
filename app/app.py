@@ -16,6 +16,7 @@ Format:
   "feeds": [{"name", "type", "url", "enabled"}]  type kev = CISA KEV JSON, text = any page/RSS/list (every CVE ID in it counts)
   "watch": [{"cve": "...", "note": "..."} or {"pkg": "...", "note": "..."}]  (package name, all versions)
   "keep_days": one of KEEP_CHOICES, the longest dashboard range; KEEP_DAYS in the container env overrides it
+  "stale_days": 0-365, a project's "Last scan" turns red when older (0 = never), default STALE_DEFAULT
 """
 import datetime as dt
 import hashlib
@@ -32,7 +33,7 @@ import urllib.parse
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.3.4"  # bump on release (shown in the dashboard footer and the log)
+VERSION = "0.4.0"  # bump on release (shown in the dashboard footer and the log)
 WEB = os.environ.get("WEB_ROOT", "/srv")  # site/ here, state/ at /srv/state
 HOT = os.path.join(WEB, "state", "hot")
 OUT = os.path.join(HOT, "exploited.json")
@@ -44,6 +45,7 @@ DEFAULT_SCHEDULE = "every 6h"
 CVE_RE = re.compile(r"CVE-\d{4}-\d{4,}", re.I)
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 MODES = ("manual", "off")  # schedules without automatic runs
+STALE_DEFAULT = 8  # weekly scans + a day of slack
 KEEP_CHOICES = (7, 30, 60, 90, 180, 365, 730, 1095, 1460)  # Settings "Keep history" = the dashboard's ranges
 # set in compose.yml: Settings shows it greyed out. Display only: what's stored is publish.py's KEEP_DAYS (4 years)
 KEEP_ENV = int(os.environ["KEEP_DAYS"]) if os.environ.get("KEEP_DAYS", "").strip() else None
@@ -129,7 +131,10 @@ def validate(cfg):
     keep = cfg.get("keep_days", KEEP_CHOICES[-1])
     if keep not in KEEP_CHOICES:
         raise ValueError(f"keep history must be one of {', '.join(map(str, KEEP_CHOICES))} days")
-    return {"schedule": schedule, "feeds": feeds, "watch": watch, "keep_days": keep}
+    stale = cfg.get("stale_days", STALE_DEFAULT)
+    if type(stale) is not int or not 0 <= stale <= 365:
+        raise ValueError("stale scan days must be a whole number from 0 to 365")
+    return {"schedule": schedule, "feeds": feeds, "watch": watch, "keep_days": keep, "stale_days": stale}
 
 
 def pw_hash(password, salt):
@@ -389,8 +394,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(200, {"version": VERSION})
         if self.route == "/api/sources":
             return self.send_json(200, load_sources())
-        if self.route == "/api/keep":  # open: the dashboard's Range list needs it even with "Login to change Settings"
-            return self.send_json(200, {"days": keep_days(), "env": KEEP_ENV is not None})
+        if self.route == "/api/keep":  # open: the Range list and stale marker need it even with "Login to change Settings"
+            return self.send_json(200, {"days": keep_days(), "env": KEEP_ENV is not None,
+                                        "stale": load_sources().get("stale_days", STALE_DEFAULT)})
         if self.route == "/api/auth":  # open: the page needs it to show Log out; the username only when logged in
             login = read_json(AUTH, None)
             me = self.logged_in(login)

@@ -64,9 +64,9 @@ def main():
     # Settings: feeds off (no internet in CI), watch a CVE and a package, run now
     code, body, _ = call(a, "/api/sources", "PUT", {"schedule": "manual", "feeds": [
         {"name": "CISA KEV", "type": "kev", "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json", "enabled": False}],
-        "watch": [{"cve": "CVE-2021-44228", "note": "smoke"}, {"pkg": "php8.2-cli", "note": "smoke"}], "keep_days": 90})
+        "watch": [{"cve": "CVE-2021-44228", "note": "smoke"}, {"pkg": "php8.2-cli", "note": "smoke"}], "keep_days": 90, "stale_days": 3})
     ok(code == 200, "save settings")
-    ok(json.loads(call(a, "/api/keep")[1]) == {"days": 90, "env": False}, "keep history saved")
+    ok(json.loads(call(a, "/api/keep")[1]) == {"days": 90, "env": False, "stale": 3}, "keep history and stale days saved")
     ok(call(a, "/api/sources", "PUT", {"schedule": "every 1m"})[0] == 400, "reject too frequent schedule")
     hot = {}
     for _ in range(20):

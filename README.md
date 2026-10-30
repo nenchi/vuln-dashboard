@@ -25,7 +25,7 @@ and a searchable package inventory (SBOM) across all projects. Findings that are
 # compose.yml
 services:
   vuln-dashboard:
-    image: ghcr.io/nenchi/vuln-dashboard:0.3.4
+    image: ghcr.io/nenchi/vuln-dashboard:0.4.0
     container_name: vuln-dashboard
     ports:
       - "8080:80"            # or put it behind your reverse proxy
@@ -59,6 +59,9 @@ How far back the dashboard goes (the Range list: 7 days to 4 years) is set in Se
 `KEEP_DAYS` in the dashboard's own compose.yml (`environment: [KEEP_DAYS=180]`), which greys out the Settings field.
 That only limits what is shown; the data files keep what publish.py's `KEEP_DAYS` allows.
 
+A project's "Last scan" date turns red when it is older than Settings → Stale scan (8 days by default, weekly
+scans plus a day; 0 turns it off), so a scan that stopped publishing stands out.
+
 Images come from every `compose.yml` / `compose.yaml` below the current folder, or from `IMAGES="img1 img2"`.
 Trivy reads them from the local Docker daemon first (also locally built images, no re-pull) through
 `/var/run/docker.sock`; set `TRIVY_DOCKER_SOCKET` to another path (rootless Docker) or empty to always pull.
@@ -69,7 +72,7 @@ No Git needed. Trivy scans and the result goes straight into the dashboard's `st
 
 ```bash
 # a released version, not main: you're running it as code on your host
-curl -fsSL -o /opt/vuln-dashboard/publish.py https://raw.githubusercontent.com/nenchi/vuln-dashboard/v0.3.4/publish.py
+curl -fsSL -o /opt/vuln-dashboard/publish.py https://raw.githubusercontent.com/nenchi/vuln-dashboard/v0.4.0/publish.py
 
 # scan the images of one compose project
 cd /opt/stacks/immich
@@ -121,7 +124,7 @@ jobs:
           DASH_REPO: you/vuln-data                 # the private data repo
           TRIVY_IMAGE: aquasec/trivy:0.76.1        # pin it; Renovate can bump it
         run: |
-          curl -fsSL https://raw.githubusercontent.com/nenchi/vuln-dashboard/v0.3.4/publish.py | python3 -
+          curl -fsSL https://raw.githubusercontent.com/nenchi/vuln-dashboard/v0.4.0/publish.py | python3 -
 ```
 
 `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY` (the project name on the dashboard) and `GITHUB_REF` are set by Gitea.
