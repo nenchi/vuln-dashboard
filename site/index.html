@@ -542,8 +542,9 @@ function sortable(tbl) {
     const dir = th.dataset.dir = th.dataset.dir === "asc" ? "desc" : "asc";
     const val = tr => { const td = tr.children[i]; return td.dataset.v ?? td.textContent.trim(); };
     const rows = [...tbl.tBodies[0].rows].sort((a, b) => {
-      const x = val(a), y = val(b), nx = parseFloat(x), ny = parseFloat(y);
-      const c = !isNaN(nx) && !isNaN(ny) ? nx - ny : x.localeCompare(y);
+      // numbers only when the whole value is one (parseFloat read "2026-10-26" as 2026); else text, digits natural (1.9 < 1.10)
+      const x = val(a), y = val(b), num = v => v !== "" && isFinite(v);
+      const c = num(x) && num(y) ? x - y : x.localeCompare(y, undefined, { numeric: true });
       return dir === "asc" ? c : -c;
     });
     tbl.tBodies[0].append(...rows);

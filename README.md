@@ -25,7 +25,7 @@ and a searchable package inventory (SBOM) across all projects. Findings that are
 # compose.yml
 services:
   vuln-dashboard:
-    image: ghcr.io/nenchi/vuln-dashboard:0.4.1
+    image: ghcr.io/nenchi/vuln-dashboard:0.4.2
     container_name: vuln-dashboard
     ports:
       - "8080:80"            # or put it behind your reverse proxy
@@ -72,7 +72,7 @@ No Git needed. Trivy scans and the result goes straight into the dashboard's `st
 
 ```bash
 # a released version, not main: you're running it as code on your host
-curl -fsSL -o /opt/vuln-dashboard/publish.py https://raw.githubusercontent.com/nenchi/vuln-dashboard/v0.4.1/publish.py
+curl -fsSL -o /opt/vuln-dashboard/publish.py https://raw.githubusercontent.com/nenchi/vuln-dashboard/v0.4.2/publish.py
 
 # scan the images of one compose project
 cd /opt/stacks/immich
@@ -124,7 +124,7 @@ jobs:
           DASH_REPO: you/vuln-data                 # the private data repo
           TRIVY_IMAGE: aquasec/trivy:0.76.1        # pin it; Renovate can bump it
         run: |
-          curl -fsSL https://raw.githubusercontent.com/nenchi/vuln-dashboard/v0.4.1/publish.py | python3 -
+          curl -fsSL https://raw.githubusercontent.com/nenchi/vuln-dashboard/v0.4.2/publish.py | python3 -
 ```
 
 `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY` (the project name on the dashboard) and `GITHUB_REF` are set by Gitea.
