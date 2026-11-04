@@ -7,6 +7,13 @@ and the dashboard shows open findings by severity with up to 4 years of history,
 and a searchable package inventory (SBOM) across all projects. Findings that are **actively exploited in the wild**
 (CISA KEV, your own feeds or a watchlist) are marked red and sorted first.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".assets/dashboard-dark.png">
+  <img alt="The dashboard: exploited and open findings, time to patch, open findings by severity over 90 days, new vs patched per week, and the projects table (example data)" src=".assets/dashboard-light.png" width="800">
+</picture>
+
+<sub>Example data: five made-up projects. The red "exploited" marks come from the real CISA KEV list.</sub>
+
 > **Made for home labs, not for production.** It's a hobby project: one container, one optional user, no high
 > availability, no audit trail. Use it to keep an eye on your own setup. For anything business-critical, use a
 > dedicated product. It is provided as is, without warranty (see [License](#license)).
