@@ -19,6 +19,9 @@ and a searchable package inventory (SBOM) across all projects. Findings that are
 > dedicated product. It is provided as is, without warranty (see [License](#license)).
 
 - **One container:** Python standard library only, no database. Data is plain JSON files.
+- **Light on resources:** measured over a week on a home server with 38 projects: about 25 MB of RAM and almost
+  no CPU (under 0.1% of one core on average). The image is a ~20 MB download (Python on Alpine). The heavy part, the
+  Trivy scans, runs in your CI or deploy jobs, not in the dashboard.
 - **Exploited marks:** CISA KEV out of the box, extra feeds (any page or RSS listing CVE IDs), and a watchlist for
   day 0, before any feed has it.
 - **Settings page:** feeds on/off, watchlist, schedule (every N hours/minutes, daily, weekly, manual only, disabled),
