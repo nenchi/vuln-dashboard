@@ -33,7 +33,7 @@ import urllib.parse
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.2"  # bump on release (shown in the dashboard footer and the log)
+VERSION = "0.5.0"  # bump on release (shown in the dashboard footer and the log)
 WEB = os.environ.get("WEB_ROOT", "/srv")  # site/ here, state/ at /srv/state
 HOT = os.path.join(WEB, "state", "hot")
 OUT = os.path.join(HOT, "exploited.json")
@@ -46,7 +46,7 @@ CVE_RE = re.compile(r"CVE-\d{4}-\d{4,}", re.I)
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 MODES = ("manual", "off")  # schedules without automatic runs
 STALE_DEFAULT = 8  # weekly scans + a day of slack
-KEEP_CHOICES = (7, 30, 60, 90, 180, 365, 730, 1095, 1460)  # Settings "Keep history" = the dashboard's ranges
+KEEP_CHOICES = (7, 14, 30, 60, 90, 180, 365, 730, 1095, 1460)  # Settings "Keep history" = the dashboard's ranges
 # set in compose.yml: Settings shows it greyed out. Display only: what's stored is publish.py's KEEP_DAYS (4 years)
 KEEP_ENV = int(os.environ["KEEP_DAYS"]) if os.environ.get("KEEP_DAYS", "").strip() else None
 wake = threading.Event()  # set by a save or "Check now": fetch right away

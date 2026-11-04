@@ -84,7 +84,7 @@
       <a href="#packages" id="pkglink">Packages</a>
       <a href="#settings">Settings</a>
       <a href="#" id="logout" hidden>Log out</a>
-      <label>Range <select id="range"><option value="7">7 days</option><option value="30">30 days</option><option value="60">60 days</option><option value="90" selected>90 days</option><option value="180">180 days</option><option value="365">1 year</option><option value="730">2 years</option><option value="1095">3 years</option><option value="1460">4 years</option></select></label>
+      <label>Range <select id="range"><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option><option value="60">60 days</option><option value="90" selected>90 days</option><option value="180">180 days</option><option value="365">1 year</option><option value="730">2 years</option><option value="1095">3 years</option><option value="1460">4 years</option><option value="all">All</option></select></label>
     </div>
   </header>
   <div id="dash">
@@ -106,7 +106,8 @@ const SEV_VAR = { CRITICAL: "--crit", HIGH: "--high", MEDIUM: "--med", LOW: "--l
 const DAY = 864e5;
 let states = [], charts = {}, inventories = null;
 let keep = { days: 1460, env: false, stale: 8 };  // Settings "Keep history" (or KEEP_DAYS in compose.yml): the longest range
-const RANGES = [...document.getElementById("range").options].map(o => ({ value: o.value, label: o.text }));
+// "All" is not a Keep history choice: it is offered on top once history goes past a year
+const RANGES = [...document.getElementById("range").options].filter(o => o.value !== "all").map(o => ({ value: o.value, label: o.text }));
 // exploited-in-the-wild list from hot.py; hotp = repo|image|package -> {src, note}
 let hot = { cves: {}, pkgs: {}, errors: [] }, hotp = {};
 const rank = s => SEVS.indexOf(s) < 0 ? 9 : SEVS.indexOf(s);
@@ -114,6 +115,8 @@ const rank = s => SEVS.indexOf(s) < 0 ? 9 : SEVS.indexOf(s);
 const day = t => t.slice(0, 10);
 // localStorage can throw (private window, blocked storage): then nothing is remembered
 const store = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch { return null; } };
+// show the remembered range right away, not the HTML default until load() finishes
+{ const r = document.getElementById("range"), v = store("range"); if ([...r.options].some(o => o.value === v)) r.value = v; }
 const days = (a, b) => (new Date(b) - new Date(a)) / DAY;
 const median = xs => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const fmtDays = d => d == null ? "–" : d < 1 ? "<1 d" : `${Math.round(d)} d`;
@@ -128,17 +131,24 @@ const hotBadge = h => h ? ` <span class="hot" title="${esc(h.src + (h.note ? ": 
 const ttp = c => days(c.fix_first || c.first, c.closed);
 
 async function load() {
-  const res = await fetch("state/", { headers: { Accept: "application/json" } });
-  const files = (await res.json()).filter(f => f.name.endsWith(".json"));
-  states = (await Promise.all(files.map(f => fetch("state/" + f.name).then(r => r.json()))))
-    .sort((a, b) => a.repo.localeCompare(b.repo));
-  hot = await fetch("state/hot/exploited.json").then(r => r.ok ? r.json() : hot).catch(() => hot);
-  keep = await fetch("api/keep").then(r => r.ok ? r.json() : keep).catch(() => keep);
+  // independent requests, fetched in parallel
+  const loadStates = async () => {
+    const res = await fetch("state/", { headers: { Accept: "application/json" } });
+    const files = (await res.json()).filter(f => f.name.endsWith(".json"));
+    return (await Promise.all(files.map(f => fetch("state/" + f.name).then(r => r.json()))))
+      .sort((a, b) => a.repo.localeCompare(b.repo));
+  };
+  [states, hot, keep] = await Promise.all([
+    loadStates(),
+    fetch("state/hot/exploited.json").then(r => r.ok ? r.json() : hot).catch(() => hot),
+    fetch("api/keep").then(r => r.ok ? r.json() : keep).catch(() => keep),
+  ]);
   // only ranges up to Keep history (at least the shortest); a range that no longer fits falls back to the longest left
-  const sel = document.getElementById("range"), cur = +(store("range") || sel.value);  // last range picked in this browser
+  const sel = document.getElementById("range"), cur = store("range") || sel.value;  // last range picked in this browser
   const fit = RANGES.filter((o, i) => !i || +o.value <= keep.days);
+  if (keep.days > 365) fit.push({ value: "all", label: "All" });
   sel.innerHTML = fit.map(o => `<option value="${o.value}">${o.label}</option>`).join("");
-  sel.value = fit.some(o => +o.value === cur) ? cur : fit.at(-1).value;
+  sel.value = fit.some(o => o.value === cur) ? cur : fit.at(-1).value;
   fetch("api/auth").then(r => r.json()).then(a => document.getElementById("logout").hidden = !a.logged_in).catch(() => {});
   fetch("api/version").then(r => r.json()).then(v => document.getElementById("version").textContent = `vuln-dashboard ${v.version}`).catch(() => {});
   // watched package names can match packages with no finding yet (zero-day), so they need the inventories
@@ -200,7 +210,10 @@ function render() {
   document.getElementById("dash").hidden = false;
   const repo = decodeURIComponent(location.hash.slice(1));
   const sel = repo ? states.filter(s => s.repo === repo) : states;
-  const range = +document.getElementById("range").value;
+  const rv = document.getElementById("range").value;
+  // All = since the first scan of the shown projects (at least a week, at most Keep history)
+  const first = Math.min(...sel.filter(st => st.scans.length).map(st => Date.parse(day(st.scans[0].t))));
+  const range = rv !== "all" ? +rv : Math.min(keep.days, Math.max(7, Math.floor((Date.now() - first) / DAY) + 1 || 7));
   const axis = dayAxis(range);
   document.getElementById("title").textContent = repo || "Vulnerability Dashboard";
   document.getElementById("back").hidden = !repo;
